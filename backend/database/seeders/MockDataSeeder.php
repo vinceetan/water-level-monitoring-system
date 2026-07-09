@@ -15,10 +15,11 @@ class MockDataSeeder extends Seeder
     {
         // 1. Settings
         Setting::firstOrCreate([], [
-            'system_name' => 'FloodWatch System',
-            'warning_threshold_cm' => 150,
-            'critical_threshold_cm' => 250,
-            'max_depth_cm' => 300,
+            'sensor_height_cm' => 300,
+            'warning_level_percent' => 70,
+            'critical_level_percent' => 90,
+            'sampling_interval_seconds' => 5,
+            'buzzer_enabled' => true,
         ]);
 
         // 2. Devices
