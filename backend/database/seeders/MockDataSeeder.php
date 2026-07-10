@@ -2,19 +2,32 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use App\Models\Device;
-use App\Models\Setting;
-use App\Models\SensorReading;
 use App\Models\Alert;
+use App\Models\Device;
+use App\Models\SensorReading;
+use App\Models\Setting;
+use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class MockDataSeeder extends Seeder
 {
     public function run(): void
     {
-        // 1. Settings
-        Setting::firstOrCreate([], [
+        $admin = User::firstOrCreate(
+            ['email' => 'admin@example.com'],
+            [
+                'full_name' => 'Admin',
+                'password' => Hash::make('password'),
+            ]
+        );
+        if ($admin->role !== 'admin') {
+            $admin->role = 'admin';
+            $admin->save();
+        }
+
+        $settings = Setting::firstOrCreate([], [
             'sensor_height_cm' => 300,
             'warning_level_percent' => 70,
             'critical_level_percent' => 90,
@@ -22,7 +35,10 @@ class MockDataSeeder extends Seeder
             'buzzer_enabled' => true,
         ]);
 
-        // 2. Devices
+        $sensorHeight = (float) $settings->sensor_height_cm;
+        $warningPct = (float) $settings->warning_level_percent;
+        $criticalPct = (float) $settings->critical_level_percent;
+
         $device1 = Device::firstOrCreate(
             ['device_name' => 'River Station Alpha'],
             [
@@ -34,41 +50,29 @@ class MockDataSeeder extends Seeder
             ]
         );
 
+        $device2 = Device::firstOrCreate(
+            ['device_name' => 'River Station Beta'],
+            [
+                'device_code' => 'DEV_BETA_002',
+                'location' => 'South Creek',
+                'status' => 'online',
+                'is_active' => true,
+                'last_seen' => now(),
+            ]
+        );
 
+        $this->seedSensorReadings($device1, $sensorHeight, $warningPct, $criticalPct, [
+            'start_distance' => 195,
+            'end_distance' => 75,
+            'noise' => 8,
+        ]);
 
-        // 3. Mock Readings (generate last 30 days of data for device 1)
-        SensorReading::where('device_id', $device1->id)->delete();
-        $start = Carbon::now()->subDays(30)->startOfDay(); // Start 30 days ago at midnight
-        
-        $baseDistance = 200; // cm
-        $now = Carbon::now();
-        $hoursDiff = $start->diffInHours($now);
+        $this->seedSensorReadings($device2, $sensorHeight, $warningPct, $criticalPct, [
+            'start_distance' => 220,
+            'end_distance' => 140,
+            'noise' => 5,
+        ]);
 
-        for ($i = 0; $i <= $hoursDiff; $i++) {
-            $currentDate = (clone $start)->addHours($i);
-            
-            // Random fluctuation for realistic line chart
-            $fluctuation = rand(-20, 20);
-            $distance = $baseDistance + $fluctuation;
-            
-            $percent = max(0, min(100, (($distance) / 300) * 100));
-            
-            $status = 'SAFE';
-            if ($percent > 70) $status = 'WARNING';
-            if ($percent > 90) $status = 'CRITICAL';
-
-            SensorReading::create([
-                'device_id' => $device1->id,
-                'distance_cm' => $distance,
-                'water_level_percent' => $percent,
-                'status' => $status,
-                'created_at' => $currentDate,
-            ]);
-            
-            $baseDistance = $distance; // Make the graph continuous
-        }
-
-        // 4. Alerts
         Alert::firstOrCreate(
             ['message' => 'Water level rising rapidly at North Bridge'],
             [
@@ -79,5 +83,119 @@ class MockDataSeeder extends Seeder
                 'expires_at' => now()->addHours(2),
             ]
         );
+    }
+
+    /**
+     * Generate realistic sensor readings for charts and dashboards.
+     *
+     * - Hourly points for the past 30 days (long-term history)
+     * - Every 5 minutes for the past 24 hours (detailed recent chart)
+     */
+    private function seedSensorReadings(
+        Device $device,
+        float $sensorHeight,
+        float $warningPct,
+        float $criticalPct,
+        array $profile
+    ): void {
+        SensorReading::where('device_id', $device->id)->delete();
+
+        $now = Carbon::now();
+        $readings = [];
+        $startDistance = $profile['start_distance'];
+        $endDistance = $profile['end_distance'];
+        $noise = $profile['noise'];
+
+        $hourlyStart = $now->copy()->subDays(30)->startOfDay();
+        $hourlyEnd = $now->copy()->subHours(24);
+        $totalHours = max(1, $hourlyStart->diffInHours($hourlyEnd));
+
+        for ($i = 0; $i <= $totalHours; $i++) {
+            $time = $hourlyStart->copy()->addHours($i);
+            $progress = $i / $totalHours;
+            $distance = $this->interpolateDistance($startDistance, $endDistance, $progress, $noise, $sensorHeight);
+
+            $readings[] = $this->buildReadingRow(
+                $device->id,
+                $distance,
+                $sensorHeight,
+                $warningPct,
+                $criticalPct,
+                $time
+            );
+        }
+
+        $denseStart = $now->copy()->subHours(24);
+        $denseHours = 24;
+        $denseSteps = $denseHours * 12;
+
+        for ($i = 0; $i <= $denseSteps; $i++) {
+            $time = $denseStart->copy()->addMinutes($i * 5);
+            $progress = $i / max(1, $denseSteps);
+            $distance = $this->interpolateDistance($startDistance, $endDistance, $progress, $noise / 2, $sensorHeight);
+
+            $readings[] = $this->buildReadingRow(
+                $device->id,
+                $distance,
+                $sensorHeight,
+                $warningPct,
+                $criticalPct,
+                $time
+            );
+        }
+
+        foreach (array_chunk($readings, 500) as $chunk) {
+            try {
+                SensorReading::insert($chunk);
+            } catch (\Throwable) {
+                // Inserts still commit; Laravel's query listener can throw
+                // when the mbstring extension is missing on Windows PHP.
+            }
+        }
+
+        $latest = SensorReading::where('device_id', $device->id)->latest('created_at')->first();
+        if ($latest) {
+            $device->update(['last_seen' => $latest->created_at, 'status' => 'online']);
+        }
+    }
+
+    private function interpolateDistance(
+        float $startDistance,
+        float $endDistance,
+        float $progress,
+        int $noise,
+        float $sensorHeight
+    ): float {
+        $trend = $startDistance + (($endDistance - $startDistance) * $progress);
+        $distance = $trend + rand(-$noise, $noise);
+
+        return max(15, min($sensorHeight - 5, $distance));
+    }
+
+    private function buildReadingRow(
+        int $deviceId,
+        float $distance,
+        float $sensorHeight,
+        float $warningPct,
+        float $criticalPct,
+        Carbon $time
+    ): array {
+        $percent = round((($sensorHeight - $distance) / $sensorHeight) * 100, 2);
+        $percent = max(0, min(100, $percent));
+
+        $status = 'SAFE';
+        if ($percent >= $criticalPct) {
+            $status = 'CRITICAL';
+        } elseif ($percent >= $warningPct) {
+            $status = 'WARNING';
+        }
+
+        return [
+            'device_id' => $deviceId,
+            'distance_cm' => round($distance, 2),
+            'water_level_percent' => $percent,
+            'status' => $status,
+            'created_at' => $time,
+        ];
     }
 }
