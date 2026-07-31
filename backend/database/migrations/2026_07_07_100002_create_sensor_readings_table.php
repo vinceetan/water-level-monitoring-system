@@ -12,6 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('device_id')->constrained('devices')->onDelete('cascade');
             $table->decimal('distance_cm', 6, 2);
+            $table->decimal('water_level_cm', 6, 2);
             $table->decimal('water_level_percent', 5, 2);
             $table->enum('status', ['SAFE', 'WARNING', 'CRITICAL']);
             $table->timestamp('created_at')->useCurrent();

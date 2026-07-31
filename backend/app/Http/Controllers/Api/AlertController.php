@@ -110,6 +110,13 @@ class AlertController extends Controller
             'user:id,full_name',
         ]);
 
+        // Queue this for the ESP32 to send via GSM
+        \Illuminate\Support\Facades\Cache::put(
+            'pending_manual_sms', 
+            "ANNOUNCEMENT: {$alert->title} - {$alert->message}", 
+            now()->addMinutes(10)
+        );
+
         return response()->json([
             'message' => 'Alert created successfully.',
             'alert'   => $alert,

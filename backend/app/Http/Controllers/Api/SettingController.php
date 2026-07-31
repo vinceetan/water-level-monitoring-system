@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Setting\UpdateSettingRequest;
 use App\Models\Setting;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class SettingController extends Controller
 {
@@ -61,9 +62,25 @@ class SettingController extends Controller
 
         $settings->update($request->validated());
 
+        // Tell the ESP32 to restart on its next 1-second ping
+        \Illuminate\Support\Facades\Cache::put('restart_esp32', true, now()->addMinutes(2));
+
         return response()->json([
             'message'  => 'Settings updated successfully.',
             'settings' => $settings,
         ]);
+    }
+
+    /**
+     * POST /api/buzzer-toggle
+     * Endpoint for the ESP32 to push physical button toggles to the web.
+     */
+    public function toggleBuzzer(Request $request): JsonResponse
+    {
+        $settings = Setting::first();
+        if ($settings) {
+            $settings->update(['buzzer_enabled' => $request->boolean('buzzer_enabled')]);
+        }
+        return response()->json(['message' => 'Buzzer toggled by device.']);
     }
 }

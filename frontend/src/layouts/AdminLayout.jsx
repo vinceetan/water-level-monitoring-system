@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 export default function AdminLayout() {
   const { user, logout } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -14,10 +15,15 @@ export default function AdminLayout() {
       label: "Dashboard",
       icon: <i className="bx bx-bar-chart-alt-2"></i>,
     },
+    {
+      path: "/admin/history",
+      label: "History",
+      icon: <i className="bx bx-history"></i>,
+    },
 
     {
       path: "/admin/alerts",
-      label: "Alerts",
+      label: "Announcements",
       icon: <i className="bx bx-bell"></i>,
     },
     {
@@ -38,12 +44,20 @@ export default function AdminLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex font-sans">
+    <div className="min-h-screen bg-slate-950 flex font-sans relative">
+      {/* Mobile Overlay */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden backdrop-blur-sm"
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <aside
-        className={`${
-          isCollapsed ? "w-15" : "w-64"
-        } bg-slate-900 text-slate-300 flex flex-col fixed h-full z-10 shadow-2xl border border-slate-800/50 overflow-y-auto overflow-x-hidden no-scrollbar transition-all duration-300`}
+        className={`${isCollapsed ? "w-15" : "w-64"} ${
+          isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        } bg-slate-900 text-slate-300 flex flex-col fixed h-full z-40 shadow-2xl border border-slate-800/50 overflow-y-auto overflow-x-hidden no-scrollbar transition-all duration-300`}
       >
         {/* Logo */}
         <div
@@ -72,33 +86,54 @@ export default function AdminLayout() {
             </div>
             {!isCollapsed && (
               <h1 className="text-white text-lg tracking-wide whitespace-nowrap">
-                Admin Panel
+                FloodWatch
               </h1>
             )}
           </div>
-          {!isCollapsed && (
-            <button
-              onClick={() => setIsCollapsed(true)}
-              className="text-slate-500 hover:text-white transition shrink-0"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="lucide lucide-panel-left-close-icon lucide-panel-left-close"
+            <>
+              <button
+                onClick={() => setIsCollapsed(true)}
+                className="hidden lg:block text-slate-500 hover:text-white transition shrink-0"
               >
-                <rect width="18" height="18" x="3" y="3" rx="2" />
-                <path d="M9 3v18" />
-                <path d="m16 15-3-3 3-3" />
-              </svg>
-            </button>
-          )}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="lucide lucide-panel-left-close-icon lucide-panel-left-close"
+                >
+                  <rect width="18" height="18" x="3" y="3" rx="2" />
+                  <path d="M9 3v18" />
+                  <path d="m16 15-3-3 3-3" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setIsMobileOpen(false)}
+                className="lg:hidden text-slate-500 hover:text-white transition shrink-0"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="lucide lucide-panel-left-close-icon lucide-panel-left-close"
+                >
+                  <rect width="18" height="18" x="3" y="3" rx="2" />
+                  <path d="M9 3v18" />
+                  <path d="m16 15-3-3 3-3" />
+                </svg>
+              </button>
+            </>
         </div>
 
         <div className="px-3 pb-3">
@@ -113,6 +148,7 @@ export default function AdminLayout() {
               <Link
                 key={item.path}
                 to={item.path}
+                onClick={() => setIsMobileOpen(false)}
                 className={`group relative flex items-center ${
                   isCollapsed ? "justify-center" : "gap-3 px-3"
                 } py-1.5 rounded-xl text-sm font-medium transition-all duration-300 overflow-hidden ${
@@ -191,12 +227,32 @@ export default function AdminLayout() {
 
       {/* Main content */}
       <main
-        className={`flex-1 ${
-          isCollapsed ? "ml-20" : "ml-64"
-        } p-4 flex transition-all duration-300`}
+        className={`flex-1 flex flex-col ${
+          isCollapsed ? "lg:ml-20" : "lg:ml-64"
+        } ml-0 p-2 lg:p-4 transition-all duration-300 relative overflow-x-hidden`}
       >
-        <div className="w-full rounded-3xl overflow-hidden shadow-2xl relative">
-          <Outlet />
+        {/* Mobile Header (In document flow, hidden on dashboard) */}
+        {!isMobileOpen && location.pathname !== '/admin' && (
+          <div className="lg:hidden flex justify-between items-center w-full pb-4 px-2">
+            <button
+              onClick={() => setIsMobileOpen(true)}
+              className="text-white/90 hover:text-white"
+            >
+              <i className="bx bx-menu text-3xl"></i>
+            </button>
+            <div className="text-[13px] tracking-wide font-medium text-white/90">
+              {new Date().toLocaleDateString("en-US", {
+                weekday: "long",
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="w-full rounded-3xl overflow-hidden shadow-2xl relative min-h-[calc(100vh-2rem)] lg:min-h-0">
+          <Outlet context={{ setIsMobileOpen }} />
         </div>
       </main>
     </div>

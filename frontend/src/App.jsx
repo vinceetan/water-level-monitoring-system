@@ -17,6 +17,7 @@ import AdminDevices from './pages/admin/Devices';
 import AdminAlerts from './pages/admin/Alerts';
 import AdminSettings from './pages/admin/Settings';
 import AdminUsers from './pages/admin/Users';
+import AdminHistory from './pages/admin/History';
 
 /**
  * Route guard — redirects to login if not authenticated as admin.
@@ -57,6 +58,7 @@ export default function App() {
             <Route path="/admin/alerts" element={<AdminAlerts />} />
             <Route path="/admin/settings" element={<AdminSettings />} />
             <Route path="/admin/users" element={<AdminUsers />} />
+            <Route path="/admin/history" element={<AdminHistory />} />
           </Route>
         </Routes>
       </AuthProvider>

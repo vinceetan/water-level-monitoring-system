@@ -10,9 +10,9 @@ return new class extends Migration
     {
         Schema::create('settings', function (Blueprint $table) {
             $table->id();
-            $table->decimal('sensor_height_cm', 6, 2);
-            $table->integer('warning_level_percent');
-            $table->integer('critical_level_percent');
+            $table->decimal('sensor_height_cm', 6, 2)->default(300.0);
+            $table->decimal('warning_level_cm', 6, 2)->default(200.0);
+            $table->decimal('critical_level_cm', 6, 2)->default(250.0);
             $table->integer('sampling_interval_seconds')->default(5);
             $table->boolean('buzzer_enabled')->default(true);
             $table->timestamp('updated_at')->useCurrent()->useCurrentOnUpdate();

@@ -29,10 +29,13 @@ class Setting extends Model
      */
     protected $fillable = [
         'sensor_height_cm',
-        'warning_level_percent',
-        'critical_level_percent',
+        'warning_level_cm',
+        'critical_level_cm',
         'sampling_interval_seconds',
         'buzzer_enabled',
+        'wifi_ssid',
+        'wifi_password',
+        'sms_target_number',
     ];
 
     /**
@@ -42,7 +45,13 @@ class Setting extends Model
     {
         return [
             'sensor_height_cm' => 'decimal:2',
+            'warning_level_cm' => 'decimal:2',
+            'critical_level_cm' => 'decimal:2',
+            'sampling_interval_seconds' => 'integer',
             'buzzer_enabled' => 'boolean',
+            'wifi_ssid' => 'string',
+            'wifi_password' => 'string',
+            'sms_target_number' => 'string',
         ];
     }
 }

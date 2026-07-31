@@ -34,6 +34,7 @@ class SensorReading extends Model
     protected $fillable = [
         'device_id',
         'distance_cm',
+        'water_level_cm',
         'water_level_percent',
         'status',
     ];
@@ -48,6 +49,7 @@ class SensorReading extends Model
     {
         return [
             'distance_cm' => 'decimal:2',
+            'water_level_cm' => 'decimal:2',
             'water_level_percent' => 'decimal:2',
         ];
     }

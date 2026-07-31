@@ -28,7 +28,7 @@ Artisan::command('inspire', function () {
         ]);
         
         if ($alert->wasRecentlyCreated) {
-            \App\Services\TwilioService::sendSms("⚠️ AquaWatch Alert: Station {$device->device_code} ({$device->device_name}) is OFFLINE. Connection lost.");
+            // Future: GSM offline alert if needed
         }
     }
 

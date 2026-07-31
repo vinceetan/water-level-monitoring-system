@@ -27,10 +27,13 @@ class UpdateSettingRequest extends FormRequest
     {
         return [
             'sensor_height_cm'          => ['sometimes', 'numeric', 'min:1', 'max:9999.99'],
-            'warning_level_percent'     => ['sometimes', 'integer', 'min:1', 'max:99'],
-            'critical_level_percent'    => ['sometimes', 'integer', 'min:2', 'max:100'],
+            'warning_level_cm'          => ['sometimes', 'numeric', 'min:1', 'max:9999.99'],
+            'critical_level_cm'         => ['sometimes', 'numeric', 'min:1', 'max:9999.99'],
             'sampling_interval_seconds' => ['sometimes', 'integer', 'min:1', 'max:3600'],
             'buzzer_enabled'            => ['sometimes', 'boolean'],
+            'wifi_ssid'                 => ['sometimes', 'nullable', 'string', 'max:64'],
+            'wifi_password'             => ['sometimes', 'nullable', 'string', 'max:64'],
+            'sms_target_number'         => ['sometimes', 'nullable', 'string', 'max:20'],
         ];
     }
 
@@ -44,13 +47,13 @@ class UpdateSettingRequest extends FormRequest
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
-            $warning = $this->input('warning_level_percent');
-            $critical = $this->input('critical_level_percent');
+            $warning = $this->input('warning_level_cm');
+            $critical = $this->input('critical_level_cm');
 
             // Only validate if both are being updated in this request
             if ($warning !== null && $critical !== null && $critical <= $warning) {
                 $validator->errors()->add(
-                    'critical_level_percent',
+                    'critical_level_cm',
                     'Critical level must be higher than warning level.'
                 );
             }

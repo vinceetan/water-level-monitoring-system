@@ -1,11 +1,14 @@
 import { useState, useEffect } from "react";
+import { useOutletContext } from "react-router-dom";
 import { publicApi } from "../../api/api";
 import DashboardHistoryPanel from "../../components/DashboardHistoryPanel";
+import ManualAlertToast from "../../components/ManualAlertToast";
 
 export default function AdminDashboard() {
   const [devices, setDevices] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { setIsMobileOpen } = useOutletContext() || {};
 
   useEffect(() => {
     async function fetchData() {
@@ -41,12 +44,13 @@ export default function AdminDashboard() {
     Math.max(parseFloat(highestDevice.water_level_percent) || 0, 0),
     100,
   );
-  const criticalAlerts = alerts.filter((a) => a.severity === "CRITICAL");
+  const systemAlerts = alerts.filter((a) => a.alert_type === "SYSTEM");
+  const criticalAlerts = systemAlerts.filter((a) => a.severity === "CRITICAL");
   const topAlert =
     criticalAlerts.length > 0
       ? criticalAlerts[0]
-      : alerts.length > 0
-        ? alerts[0]
+      : systemAlerts.length > 0
+        ? systemAlerts[0]
         : null;
 
   // Current Date formatting
@@ -60,12 +64,38 @@ export default function AdminDashboard() {
   const dateString = today.toLocaleDateString("en-US", dateOptions);
 
   return (
-    <div className="flex flex-col lg:flex-row w-full h-auto lg:h-[calc(100vh-4rem)] gap-4 font-sans">
+    <div className="flex flex-col lg:flex-row w-full h-auto lg:h-[calc(100vh-4rem)] gap-4 font-sans pb-24 lg:pb-0">
+      {/* Manual Alert Toasts from Admin */}
+      <ManualAlertToast alerts={alerts} />
       {/* LEFT SECTION - Water Gauge (Blue) */}
-      <div className="w-full lg:w-1/2 relative flex flex-col justify-between text-white px-8 py-6 overflow-hidden z-10 min-h-[500px] rounded-3xl shadow-2xl">
-        {/* Top bar (Desktop Only) */}
-        <div className="hidden md:flex justify-start items-center opacity-90 z-20">
-          <div className="text-[13px] tracking-wide font-medium text-white/90">
+      <div className="w-auto self-stretch mx-3 lg:mx-0 lg:w-1/2 relative flex flex-col justify-between text-white px-4 py-4 md:px-8 md:py-6 overflow-hidden z-10 min-h-[500px] rounded-3xl shadow-2xl">
+        {/* Top bar */}
+        <div className="flex justify-between items-start opacity-90 z-40 relative w-full">
+          {/* Left: Mobile Menu + Device Name */}
+          <div className="flex items-start gap-3">
+            {setIsMobileOpen && (
+              <button
+                onClick={() => setIsMobileOpen(true)}
+                className="md:hidden text-white/90 hover:text-white mt-0.5 shrink-0"
+              >
+                <i className="bx bx-menu text-2xl"></i>
+              </button>
+            )}
+            <div className="flex flex-col text-left">
+               <div className="text-lg font-bold tracking-wide text-white drop-shadow-md">
+                  {highestDevice?.device_name || "Waiting for Device..."}
+               </div>
+               {highestDevice?.location && (
+                 <div className="text-[13px] font-medium text-white/80 mt-0.5">
+                   <i className="bx bx-map mr-1"></i>
+                   {highestDevice.location}
+                 </div>
+               )}
+            </div>
+          </div>
+
+          {/* Right: Date */}
+          <div className="text-[13px] tracking-wide font-medium text-white/90 text-right mt-1 shrink-0">
             {dateString}
           </div>
         </div>
@@ -115,17 +145,16 @@ export default function AdminDashboard() {
                 style={{ height: `${waterLevel}%` }}
               >
                 <svg
-                  className="absolute -top-6 w-[200%] h-12 text-[#4fc3f7]/80 animate-wave"
-                  viewBox="0 0 120 28"
+                  className="absolute -top-10 w-[200%] h-20 text-[#4fc3f7]/80 animate-wave"
+                  viewBox="0 0 240 50"
                   fill="currentColor"
                   preserveAspectRatio="none"
                   style={{
                     animationDirection: "reverse",
-                    animationDuration: "6s",
+                    animationDuration: "4s",
                   }}
                 >
-                  <path d="M0,14 C30,14 30,28 60,28 C90,28 90,14 120,14 L120,28 L0,28 Z" />
-                  <path d="M0,28 C30,28 30,14 60,14 C90,14 90,28 120,28 L120,28 L0,28 Z" />
+                  <path d="M 0 25 Q 30 45 60 25 T 120 25 T 180 25 T 240 25 V 50 H 0 Z" />
                 </svg>
               </div>
 
@@ -135,13 +164,15 @@ export default function AdminDashboard() {
                 style={{ height: `${waterLevel}%` }}
               >
                 <svg
-                  className="absolute -top-5 w-[200%] h-10 text-[#29b6f6] animate-wave"
-                  viewBox="0 0 120 28"
+                  className="absolute -top-8 w-[200%] h-16 text-[#29b6f6] animate-wave"
+                  viewBox="0 0 240 50"
                   fill="currentColor"
                   preserveAspectRatio="none"
+                  style={{
+                    animationDuration: "2.5s",
+                  }}
                 >
-                  <path d="M0,14 C30,28 30,14 60,14 C90,14 90,28 120,28 L120,28 L0,28 Z" />
-                  <path d="M0,28 C30,28 30,14 60,14 C90,14 90,28 120,28 L120,28 L0,28 Z" />
+                  <path d="M 0 25 Q 30 10 60 25 T 120 25 T 180 25 T 240 25 V 50 H 0 Z" />
                 </svg>
               </div>
 
@@ -160,7 +191,7 @@ export default function AdminDashboard() {
 
         {/* Alert Overlay */}
         {topAlert && (
-          <div className="absolute  md:bottom-40 left-1/2 -translate-x-1/2 z-30 w-[85%] max-w-md">
+          <div className="absolute bottom-32 md:bottom-40 left-1/2 -translate-x-1/2 z-30 w-[85%] max-w-md">
             <div
               className={`backdrop-blur-xl bg-white/20 border border-white/30 rounded-2xl p-4 shadow-xl flex items-start gap-3 transition-all duration-300 ${topAlert.severity === "CRITICAL" ? "shadow-red-500/20 border-red-400/50 bg-red-500/20" : ""}`}
             >
@@ -206,11 +237,11 @@ export default function AdminDashboard() {
           </div>
           <div className="px-10 flex flex-col items-center">
             <div className="flex items-center gap-2 text-[22px] font-bold drop-shadow-sm">
-              <i className="bx bx-ruler text-xl opacity-90"></i>
-              {highestDevice?.distance_cm || 0}cm
+              <i className="bx bx-water text-xl opacity-90"></i>
+              {((highestDevice?.water_level_cm || 0) / 100).toFixed(2)}m
             </div>
             <span className="text-[11px] font-medium tracking-wider text-white/80 uppercase mt-1">
-              Distance
+              Water Level
             </span>
           </div>
         </div>

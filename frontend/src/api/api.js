@@ -55,6 +55,14 @@ export const publicApi = {
     const query = new URLSearchParams(params).toString();
     return request(`/sensor-readings?${query}`);
   },
+  getReadingSummary: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/sensor-readings/summary?${query}`);
+  },
+  getReadingsPaginated: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/sensor-readings/history?${query}`);
+  },
   getAlerts: () => request('/alerts'),
   getAlertHistory: (params = {}) => {
     const query = new URLSearchParams(params).toString();

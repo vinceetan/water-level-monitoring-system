@@ -14,7 +14,7 @@ export default function CommunityLayout() {
       label: "Dashboard",
       icon: <i className="bx bx-bar-chart-alt-2"></i>,
     },
-    { path: "/alerts", label: "Alerts", icon: <i className="bx bx-bell"></i> },
+    { path: "/alerts", label: "Announcements", icon: <i className="bx bx-bell"></i> },
     {
       path: "/history",
       label: "History",
@@ -27,7 +27,7 @@ export default function CommunityLayout() {
       {/* Mobile Overlay */}
       {isMobileOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-30 md:hidden backdrop-blur-sm"
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden backdrop-blur-sm"
           onClick={() => setIsMobileOpen(false)}
         />
       )}
@@ -35,7 +35,7 @@ export default function CommunityLayout() {
       {/* Sidebar */}
       <aside
         className={`${isCollapsed ? "w-15" : "w-64"} ${
-          isMobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+          isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         } bg-slate-900 text-slate-300 flex flex-col fixed h-full z-40 shadow-2xl border border-slate-800/50 overflow-y-auto overflow-x-hidden no-scrollbar transition-all duration-300`}
       >
         {/* Logo */}
@@ -74,7 +74,7 @@ export default function CommunityLayout() {
               {/* Desktop Collapse Button */}
               <button
                 onClick={() => setIsCollapsed(true)}
-                className="hidden md:block text-slate-500 hover:text-white transition shrink-0"
+                className="hidden lg:block text-slate-500 hover:text-white transition shrink-0"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -96,7 +96,7 @@ export default function CommunityLayout() {
               {/* Mobile Close Button */}
               <button
                 onClick={() => setIsMobileOpen(false)}
-                className="md:hidden text-slate-500 hover:text-white transition shrink-0"
+                className="lg:hidden text-slate-500 hover:text-white transition shrink-0"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -130,6 +130,7 @@ export default function CommunityLayout() {
               <Link
                 key={item.path}
                 to={item.path}
+                onClick={() => setIsMobileOpen(false)}
                 className={`group relative flex items-center ${
                   isCollapsed ? "justify-center" : "gap-3 px-3"
                 } py-1.5 rounded-xl text-sm font-medium transition-all duration-300 overflow-hidden ${
@@ -195,6 +196,7 @@ export default function CommunityLayout() {
             {isAdmin ? (
               <Link
                 to="/admin"
+                onClick={() => setIsMobileOpen(false)}
                 className={
                   isCollapsed
                     ? "w-10 h-10 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white flex justify-center items-center shadow-lg shadow-cyan-500/20 hover:opacity-90 transition z-10"
@@ -211,6 +213,7 @@ export default function CommunityLayout() {
             ) : (
               <Link
                 to="/admin/login"
+                onClick={() => setIsMobileOpen(false)}
                 className={
                   isCollapsed
                     ? "w-10 h-10 rounded-xl bg-gradient-to-r from-slate-800 to-slate-700 text-white flex justify-center items-center shadow-md border border-slate-700 hover:bg-slate-700 transition z-10"
@@ -232,12 +235,12 @@ export default function CommunityLayout() {
       {/* Main content */}
       <main
         className={`flex-1 flex flex-col ${
-          isCollapsed ? "md:ml-20" : "md:ml-64"
-        } ml-0 p-4 flex transition-all duration-300 relative`}
+          isCollapsed ? "lg:ml-20" : "lg:ml-64"
+        } ml-0 p-2 lg:p-4 transition-all duration-300 relative overflow-x-hidden`}
       >
-        {/* Mobile Header (In document flow) */}
-        {!isMobileOpen && (
-          <div className="md:hidden flex justify-between items-center w-full pb-4 px-2">
+        {/* Mobile Header (In document flow, hidden on dashboard) */}
+        {!isMobileOpen && location.pathname !== '/' && (
+          <div className="lg:hidden flex justify-between items-center w-full pb-4 px-2">
             <button
               onClick={() => setIsMobileOpen(true)}
               className="text-white/90 hover:text-white"
@@ -255,8 +258,8 @@ export default function CommunityLayout() {
           </div>
         )}
 
-        <div className="w-full rounded-3xl overflow-hidden shadow-2xl relative min-h-[calc(100vh-2rem)] md:min-h-0">
-          <Outlet />
+        <div className="w-full rounded-3xl overflow-hidden shadow-2xl relative min-h-[calc(100vh-2rem)] lg:min-h-0">
+          <Outlet context={{ setIsMobileOpen }} />
         </div>
       </main>
     </div>

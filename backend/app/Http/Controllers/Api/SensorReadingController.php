@@ -34,24 +34,163 @@ class SensorReadingController extends Controller
             $query->where('device_id', $request->device_id);
         }
 
-        // Filter by time range (default: last 24 hours)
-        $hours = $request->input('hours', 24);
-        $query->where('created_at', '>=', now()->subHours($hours));
+        // Filter by specific date (YYYY-MM-DD), default to today
+        if ($request->has('date')) {
+            $query->whereDate('created_at', $request->date);
+        } else {
+            $query->whereDate('created_at', today());
+        }
 
-        // Limit results (default: 100, max: 500)
-        $limit = min($request->input('limit', 100), 500);
-
-        $readings = $query->latest()->limit($limit)->get();
+        // Limit results (288 per day is standard for 5-minute intervals)
+        $limit = min($request->input('limit', 500), 1000);
+        $readings = $query->orderBy('created_at', 'asc')->limit($limit)->get();
 
         return response()->json([
             'readings' => $readings,
             'filters'  => [
                 'device_id' => $request->device_id,
-                'hours'     => (int) $hours,
+                'date'      => $request->input('date', today()->toDateString()),
                 'limit'     => $limit,
             ],
         ]);
     }
+
+    /**
+     * GET /api/sensor-readings/summary
+     *
+     * Public endpoint — returns aggregated statistics for the analytics dashboard.
+     *
+     * Supports query parameters:
+     *   ?date_from=2026-07-01  → start of date range
+     *   ?date_to=2026-07-07    → end of date range
+     *   ?status=SAFE           → filter by status
+     *   ?device_id=1           → filter by device
+     */
+    public function summary(Request $request): JsonResponse
+    {
+        $query = SensorReading::query();
+
+        // Date range filter
+        if ($request->has('date_from')) {
+            $query->where('created_at', '>=', $request->date_from . ' 00:00:00');
+        }
+        if ($request->has('date_to')) {
+            $query->where('created_at', '<=', $request->date_to . ' 23:59:59');
+        }
+
+        // Status filter
+        if ($request->has('status') && $request->status !== 'ALL') {
+            $query->where('status', $request->status);
+        }
+
+        // Device filter
+        if ($request->has('device_id')) {
+            $query->where('device_id', $request->device_id);
+        }
+
+        $stats = (clone $query)->selectRaw('
+            MAX(water_level_percent) as highest,
+            MIN(water_level_percent) as lowest,
+            AVG(water_level_percent) as average,
+            COUNT(*) as total_readings
+        ')->first();
+
+        // Get the latest reading within the filtered range
+        $latestReading = (clone $query)->latest('created_at')->first();
+
+        return response()->json([
+            'summary' => [
+                'highest'        => $stats->highest ? round((float) $stats->highest, 2) : 0,
+                'lowest'         => $stats->lowest ? round((float) $stats->lowest, 2) : 0,
+                'average'        => $stats->average ? round((float) $stats->average, 2) : 0,
+                'total_readings' => (int) $stats->total_readings,
+                'latest_status'  => $latestReading?->status ?? 'N/A',
+            ],
+        ]);
+    }
+
+    /**
+     * GET /api/sensor-readings/history
+     *
+     * Public endpoint — returns paginated sensor readings for the analytics table.
+     *
+     * Supports query parameters:
+     *   ?date_from=2026-07-01  → start of date range
+     *   ?date_to=2026-07-07    → end of date range
+     *   ?status=SAFE           → filter by status
+     *   ?search=Jul 17         → search by date/time string
+     *   ?sort_by=created_at    → sort column (created_at, water_level_percent, status)
+     *   ?sort_dir=desc         → sort direction (asc, desc)
+     *   ?per_page=20           → results per page
+     *   ?page=1                → page number
+     */
+    public function paginated(Request $request): JsonResponse
+    {
+        $query = SensorReading::with('device:id,device_name,location');
+
+        // Date range filter
+        if ($request->has('date_from')) {
+            $query->where('created_at', '>=', $request->date_from . ' 00:00:00');
+        }
+        if ($request->has('date_to')) {
+            $query->where('created_at', '<=', $request->date_to . ' 23:59:59');
+        }
+
+        // Status filter
+        if ($request->has('status') && $request->status !== 'ALL') {
+            $query->where('status', $request->status);
+        }
+
+        // Search by date/time (partial match on created_at)
+        if ($request->has('search') && $request->search) {
+            $query->where('created_at', 'LIKE', '%' . $request->search . '%');
+        }
+
+        // Sorting
+        $sortBy = in_array($request->sort_by, ['created_at', 'water_level_percent', 'status'])
+            ? $request->sort_by
+            : 'created_at';
+        $sortDir = $request->sort_dir === 'asc' ? 'asc' : 'desc';
+
+        $query->orderBy($sortBy, $sortDir);
+
+        // Paginate
+        $perPage = min((int) $request->input('per_page', 20), 100);
+        $paginated = $query->paginate($perPage);
+
+        // Calculate trend for each reading by comparing to previous
+        $items = $paginated->getCollection()->map(function ($reading, $index) use ($paginated) {
+            $items = $paginated->getCollection();
+            // Since results are sorted desc by default, "previous" chronologically is the next item
+            $prevReading = $items[$index + 1] ?? null;
+
+            if (!$prevReading) {
+                $trend = 'STABLE';
+            } else {
+                $diff = (float) $reading->water_level_percent - (float) $prevReading->water_level_percent;
+                if ($diff > 0.5) {
+                    $trend = 'RISING';
+                } elseif ($diff < -0.5) {
+                    $trend = 'FALLING';
+                } else {
+                    $trend = 'STABLE';
+                }
+            }
+
+            return array_merge($reading->toArray(), ['trend' => $trend]);
+        });
+
+        return response()->json([
+            'readings' => $items->values(),
+            'pagination' => [
+                'current_page'  => $paginated->currentPage(),
+                'last_page'     => $paginated->lastPage(),
+                'per_page'      => $paginated->perPage(),
+                'total'         => $paginated->total(),
+            ],
+        ]);
+    }
+
 
     /**
      * GET /api/sensor-readings/latest
@@ -78,6 +217,7 @@ class SensorReadingController extends Controller
                 'location'            => $device->location,
                 'device_status'       => $device->status,
                 'last_seen'           => $device->last_seen,
+                'water_level_cm'      => $latestReading?->water_level_cm,
                 'water_level_percent' => $latestReading?->water_level_percent,
                 'distance_cm'         => $latestReading?->distance_cm,
                 'status'              => $latestReading?->status,
@@ -115,16 +255,45 @@ class SensorReadingController extends Controller
             ], 403);
         }
 
-        // Determine the water level status based on settings thresholds
-        $status = $this->determineStatus($request->water_level_percent);
+        // Calculate water_level_cm
+        $settings = Setting::first();
+        $sensorHeight = $settings?->sensor_height_cm ?? 300.0;
+        $waterLevelCm = max(0, $sensorHeight - $request->distance_cm);
 
-        // Create the sensor reading
-        $reading = SensorReading::create([
-            'device_id'           => $device->id,
-            'distance_cm'         => $request->distance_cm,
-            'water_level_percent' => $request->water_level_percent,
-            'status'              => $status,
-        ]);
+        // Determine the water level status based on settings thresholds
+        $status = $this->determineStatus($waterLevelCm, $settings);
+
+        $lastReading = SensorReading::where('device_id', $device->id)
+            ->latest('created_at')
+            ->first();
+
+        $shouldUpdate = false;
+        if ($lastReading && $lastReading->status === $status) {
+            $timeSinceLast = $lastReading->created_at->diffInMinutes(now());
+            if ($timeSinceLast < 5) {
+                $shouldUpdate = true;
+            }
+        }
+
+        if ($shouldUpdate) {
+            // Update the existing point with latest values (throttling inserts to 1 per 5 mins)
+            $lastReading->update([
+                'distance_cm'         => $request->distance_cm,
+                'water_level_cm'      => $waterLevelCm,
+                'water_level_percent' => $request->water_level_percent,
+                // updated_at auto-updates, created_at remains the start of the 5-min window
+            ]);
+            $reading = $lastReading;
+        } else {
+            // Create a new reading point (status changed, or >5 mins passed)
+            $reading = SensorReading::create([
+                'device_id'           => $device->id,
+                'distance_cm'         => $request->distance_cm,
+                'water_level_cm'      => $waterLevelCm,
+                'water_level_percent' => $request->water_level_percent,
+                'status'              => $status,
+            ]);
+        }
 
         // Update the device: mark as online and record last contact time
         $device->update([
@@ -132,22 +301,47 @@ class SensorReadingController extends Controller
             'last_seen' => now(),
         ]);
 
-        // Auto-resolve any active "Connection Lost" alerts
+        // Auto-resolve "Connection Lost" alerts
         Alert::where('device_id', $device->id)
             ->where('title', 'Connection Lost')
             ->where('is_active', true)
             ->update(['is_active' => false]);
 
-        // Auto-generate a SYSTEM alert if water level is WARNING or CRITICAL.
-        // Only create a new alert if there isn't already an active alert
-        // of the same severity for this device (prevents alert spam).
-        if ($status !== 'SAFE') {
-            $this->generateSystemAlert($device, $status, $request->water_level_percent);
+        // Auto-resolve water level alerts if the status is SAFE
+        if ($status === 'SAFE') {
+            Alert::where('device_id', $device->id)
+                ->where('alert_type', 'SYSTEM')
+                ->where('is_active', true)
+                ->update(['is_active' => false]);
+        } 
+        // If WARNING, auto-resolve any CRITICAL alerts (downgrade)
+        elseif ($status === 'WARNING') {
+            Alert::where('device_id', $device->id)
+                ->where('alert_type', 'SYSTEM')
+                ->where('severity', 'CRITICAL')
+                ->where('is_active', true)
+                ->update(['is_active' => false]);
+            $this->generateSystemAlert($device, $status, $waterLevelCm);
+        }
+        // If CRITICAL, auto-resolve any WARNING alerts (upgrade)
+        elseif ($status === 'CRITICAL') {
+            Alert::where('device_id', $device->id)
+                ->where('alert_type', 'SYSTEM')
+                ->where('severity', 'WARNING')
+                ->where('is_active', true)
+                ->update(['is_active' => false]);
+            $this->generateSystemAlert($device, $status, $waterLevelCm);
         }
 
+        $pendingSms = \Illuminate\Support\Facades\Cache::pull('pending_manual_sms');
+        $restartEsp32 = \Illuminate\Support\Facades\Cache::pull('restart_esp32');
+
         return response()->json([
-            'message' => 'Reading recorded successfully.',
-            'reading' => $reading,
+            'message'        => 'Reading saved successfully.',
+            'reading'        => $reading,
+            'buzzer_enabled' => (bool) ($settings?->buzzer_enabled ?? true),
+            'pending_sms'    => $pendingSms,
+            'restart_esp32'  => (bool) $restartEsp32
         ], 201);
     }
 
@@ -156,26 +350,18 @@ class SensorReadingController extends Controller
      *
      * The thresholds are stored in the settings table so the admin
      * can change them from the dashboard without touching code.
-     *
-     * Example with default settings:
-     *   warning_level_percent = 60  → 60% and above = WARNING
-     *   critical_level_percent = 80 → 80% and above = CRITICAL
-     *   Below 60% = SAFE
      */
-    private function determineStatus(float $waterLevelPercent): string
+    private function determineStatus(float $waterLevelCm, ?Setting $settings): string
     {
-        // Fetch the current threshold settings
-        $settings = Setting::first();
-
         // Fallback defaults if no settings row exists yet
-        $warningLevel  = $settings?->warning_level_percent ?? 60;
-        $criticalLevel = $settings?->critical_level_percent ?? 80;
+        $warningLevel  = $settings?->warning_level_cm ?? 200.0;
+        $criticalLevel = $settings?->critical_level_cm ?? 250.0;
 
-        if ($waterLevelPercent >= $criticalLevel) {
+        if ($waterLevelCm >= $criticalLevel) {
             return 'CRITICAL';
         }
 
-        if ($waterLevelPercent >= $warningLevel) {
+        if ($waterLevelCm >= $warningLevel) {
             return 'WARNING';
         }
 
@@ -190,7 +376,7 @@ class SensorReadingController extends Controller
      * This prevents the system from creating a new alert every 5 seconds
      * (each time the ESP32 sends a reading).
      */
-    private function generateSystemAlert(Device $device, string $status, float $waterLevelPercent): void
+    private function generateSystemAlert(Device $device, string $status, float $waterLevelCm): void
     {
         // Check for an existing active alert of the same severity for this device
         $existingAlert = Alert::where('device_id', $device->id)
@@ -204,10 +390,12 @@ class SensorReadingController extends Controller
             return;
         }
 
+        $waterLevelM = number_format($waterLevelCm / 100, 2);
+
         // Build a human-readable alert message
         $messages = [
-            'WARNING'  => "Water level at {$device->device_name} ({$device->location}) has reached {$waterLevelPercent}%. Please stay alert.",
-            'CRITICAL' => "CRITICAL: Water level at {$device->device_name} ({$device->location}) has reached {$waterLevelPercent}%! Evacuate low-lying areas immediately.",
+            'WARNING'  => "Water level at {$device->device_name} ({$device->location}) has reached {$waterLevelM}m. Please stay alert.",
+            'CRITICAL' => "CRITICAL: Water level at {$device->device_name} ({$device->location}) has reached {$waterLevelM}m! Evacuate low-lying areas immediately.",
         ];
 
         Alert::create([
@@ -218,5 +406,7 @@ class SensorReadingController extends Controller
             'severity'   => $status,
             'is_active'  => true,
         ]);
+
+
     }
 }

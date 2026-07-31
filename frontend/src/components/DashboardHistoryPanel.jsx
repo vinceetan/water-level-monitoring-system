@@ -55,10 +55,8 @@ function getCalendarDays(year, month) {
   return days;
 }
 
-function buildDayChartData(readings, selectedDate) {
+function buildDayChartData(readings) {
   return readings
-    .filter((r) => isSameDay(r.created_at, selectedDate))
-    .reverse()
     .map((r) => {
       const rd = new Date(r.created_at);
       return {
@@ -67,7 +65,7 @@ function buildDayChartData(readings, selectedDate) {
           minute: "2-digit",
           hour12: false,
         }),
-        value: parseFloat(r.distance_cm),
+        value: parseFloat(r.water_level_cm) / 100,
       };
     });
 }
@@ -75,24 +73,19 @@ function buildDayChartData(readings, selectedDate) {
 export default function DashboardHistoryPanel({ backLink = "/" }) {
   const today = startOfDay(new Date());
   const [selectedDate, setSelectedDate] = useState(today);
+  const [baseWeekDate, setBaseWeekDate] = useState(today);
   const [showCalendar, setShowCalendar] = useState(false);
   const [viewMonth, setViewMonth] = useState(
     () => new Date(today.getFullYear(), today.getMonth(), 1),
   );
   const [historicalReadings, setHistoricalReadings] = useState([]);
 
-  const fetchHours = useMemo(() => {
-    const hours = Math.ceil(
-      (Date.now() - selectedDate.getTime()) / (1000 * 60 * 60),
-    );
-    return Math.min(Math.max(hours + 48, 168), 2160);
-  }, [selectedDate]);
-
   useEffect(() => {
     async function fetchHistory() {
       try {
         const historyData = await publicApi.getReadingHistory({
-          hours: fetchHours,
+          // Format date as YYYY-MM-DD in local time
+          date: new Date(selectedDate.getTime() - (selectedDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0],
           limit: 500,
         });
         setHistoricalReadings(historyData.readings || []);
@@ -104,11 +97,11 @@ export default function DashboardHistoryPanel({ backLink = "/" }) {
     fetchHistory();
     const interval = setInterval(fetchHistory, 15000);
     return () => clearInterval(interval);
-  }, [fetchHours]);
+  }, [selectedDate]);
 
   const calendarDays = [];
   for (let i = 6; i >= 0; i--) {
-    const d = startOfDay(new Date());
+    const d = new Date(baseWeekDate);
     d.setDate(d.getDate() - i);
     calendarDays.push({
       day: d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(),
@@ -118,19 +111,19 @@ export default function DashboardHistoryPanel({ backLink = "/" }) {
     });
   }
 
-  const chartData = buildDayChartData(historicalReadings, selectedDate);
+  const chartData = buildDayChartData(historicalReadings);
 
-  const avgDistance =
+  const avgWaterLevel =
     chartData.length > 0
       ? (
           chartData.reduce((acc, curr) => acc + curr.value, 0) / chartData.length
-        ).toFixed(0)
-      : 0;
+        ).toFixed(2)
+      : "0.00";
 
-  const currentMonthName = selectedDate
+  const currentMonthName = baseWeekDate
     .toLocaleDateString("en-US", { month: "long" })
     .toUpperCase();
-  const currentYear = selectedDate.getFullYear();
+  const currentYear = baseWeekDate.getFullYear();
 
   const pickerDays = getCalendarDays(
     viewMonth.getFullYear(),
@@ -145,11 +138,28 @@ export default function DashboardHistoryPanel({ backLink = "/" }) {
   function handleSelectDate(date) {
     if (isFuture(date)) return;
     setSelectedDate(startOfDay(date));
+    setBaseWeekDate(startOfDay(date));
     setShowCalendar(false);
   }
 
+  function handlePrevWeek() {
+    setBaseWeekDate((prev) => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() - 7);
+      return d;
+    });
+  }
+
+  function handleNextWeek() {
+    setBaseWeekDate((prev) => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() + 7);
+      return d.getTime() > today.getTime() ? today : d;
+    });
+  }
+
   return (
-    <div className="w-full lg:w-1/2 bg-slate-900 flex flex-col z-0 rounded-3xl overflow-hidden shadow-2xl border border-slate-800 relative">
+    <div className="w-auto self-stretch mx-3 lg:mx-0 lg:w-1/2 bg-slate-900 flex flex-col z-0 rounded-3xl overflow-hidden shadow-2xl border border-slate-800 relative">
       {/* Header */}
       <div className="bg-slate-900 text-white px-6 py-5 flex items-center justify-between border-b border-slate-800">
         <Link
@@ -309,7 +319,7 @@ export default function DashboardHistoryPanel({ backLink = "/" }) {
 
       {/* Month Selector */}
       <div className="flex items-center justify-between px-10 py-6">
-        <button className="text-slate-600 hover:text-slate-400 transition">
+        <button onClick={handlePrevWeek} className="text-slate-600 hover:text-white transition">
           <svg
             className="w-5 h-5"
             fill="none"
@@ -324,28 +334,82 @@ export default function DashboardHistoryPanel({ backLink = "/" }) {
             />
           </svg>
         </button>
-        <div className="flex flex-col items-center cursor-pointer">
-          <div className="flex items-center gap-2 text-slate-300 font-bold tracking-widest uppercase text-sm">
-            {currentMonthName}
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
+        <div className="flex flex-col items-center">
+          <div className="flex items-center gap-3">
+            {/* Month Dropdown */}
+            <div className="relative group">
+              <select
+                value={baseWeekDate.getMonth()}
+                onChange={(e) => {
+                  const newMonth = parseInt(e.target.value);
+                  setBaseWeekDate((prev) => {
+                    const d = new Date(prev);
+                    d.setMonth(newMonth);
+                    return d > today ? today : d;
+                  });
+                }}
+                className="bg-slate-800/80 border border-slate-700/50 rounded-xl px-4 py-1.5 text-sm font-bold tracking-widest uppercase text-slate-300 outline-none cursor-pointer hover:text-white hover:bg-slate-700 transition shadow-lg appearance-none pr-9"
+                title="Select Month"
+              >
+                {Array.from({ length: 12 }).map((_, i) => {
+                  const d = new Date(2000, i, 1);
+                  return (
+                    <option key={i} value={i} className="bg-slate-800 text-sm normal-case font-medium text-slate-200">
+                      {d.toLocaleDateString("en-US", { month: "long" })}
+                    </option>
+                  );
+                })}
+              </select>
+              <svg
+                className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover:text-white transition"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+
+            {/* Year Dropdown */}
+            <div className="relative group">
+              <select
+                value={currentYear}
+                onChange={(e) => {
+                  const newYear = parseInt(e.target.value);
+                  setBaseWeekDate(prev => {
+                    const d = new Date(prev);
+                    d.setFullYear(newYear);
+                    return d > today ? today : d;
+                  });
+                }}
+                className="bg-slate-800/80 border border-slate-700/50 rounded-xl px-4 py-1.5 text-sm font-bold tracking-widest text-slate-300 outline-none cursor-pointer hover:text-white hover:bg-slate-700 transition shadow-lg appearance-none pr-9"
+                title="Select Year"
+              >
+                {[...Array(5)].map((_, i) => {
+                  const y = today.getFullYear() - i;
+                  return (
+                    <option key={y} value={y} className="bg-slate-800 text-sm font-medium text-slate-200">
+                      {y}
+                    </option>
+                  );
+                })}
+              </select>
+              <svg
+                className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover:text-white transition"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
           </div>
-          <span className="text-slate-500 text-xs font-semibold tracking-wider mt-0.5">
-            {currentYear}
-          </span>
         </div>
-        <button className="text-slate-600 hover:text-slate-400 transition">
+        <button 
+          onClick={handleNextWeek} 
+          disabled={isSameDay(baseWeekDate, today)}
+          className="text-slate-600 hover:text-white transition disabled:opacity-30 disabled:pointer-events-none"
+        >
           <svg
             className="w-5 h-5"
             fill="none"
@@ -387,17 +451,18 @@ export default function DashboardHistoryPanel({ backLink = "/" }) {
       </div>
 
       {/* Line Chart */}
-      <div className="flex-1 w-full px-4 pt-10 pb-4 min-h-[300px]">
+      <div className="flex-1 w-full px-4 pt-10 pb-4 min-h-[300px] relative">
         {chartData.length === 0 ? (
           <div className="h-full flex items-center justify-center text-slate-500 text-sm">
             No readings for this day
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={chartData}
-              margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
-            >
+          <div className="absolute inset-0 px-4 pt-10 pb-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={chartData}
+                margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
+              >
               <CartesianGrid
                 strokeDasharray="3 3"
                 vertical={false}
@@ -409,12 +474,14 @@ export default function DashboardHistoryPanel({ backLink = "/" }) {
                 tickLine={false}
                 tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 500 }}
                 dy={15}
+                interval="preserveStartEnd"
+                minTickGap={50}
               />
               <YAxis
                 axisLine={false}
                 tickLine={false}
                 tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 500 }}
-                tickFormatter={(val) => `${val}cm`}
+                tickFormatter={(val) => `${val}m`}
               />
               <Tooltip
                 cursor={{
@@ -431,8 +498,8 @@ export default function DashboardHistoryPanel({ backLink = "/" }) {
                 labelStyle={{ fontWeight: "bold", color: "#e2e8f0" }}
                 itemStyle={{ color: "#22d3ee" }}
                 formatter={(value) => [
-                  `${Number(value).toFixed(1)} cm`,
-                  "Distance",
+                  `${Number(value).toFixed(2)}m`,
+                  "Water Level",
                 ]}
               />
               <Line
@@ -448,19 +515,20 @@ export default function DashboardHistoryPanel({ backLink = "/" }) {
                   strokeWidth: 2,
                 }}
               />
-            </LineChart>
-          </ResponsiveContainer>
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         )}
       </div>
 
       {/* Summary Footer */}
       <div className="py-6 flex flex-col items-center justify-center border-t border-slate-800 bg-slate-950/50">
         <h3 className="text-3xl font-medium text-slate-200 tracking-tight">
-          {avgDistance}
-          <span className="text-xl ml-1 text-slate-500">CM</span>
+          {avgWaterLevel}
+          <span className="text-xl ml-1 text-slate-500">m</span>
         </h3>
         <p className="text-[10px] font-bold tracking-[0.2em] text-slate-500 uppercase mt-1">
-          Avg Distance
+          Avg Water Level
         </p>
       </div>
     </div>

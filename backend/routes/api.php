@@ -40,6 +40,8 @@ Route::get('/devices/{device}', [DeviceController::class, 'show']);
 
 // Sensor Readings — public read access
 Route::get('/sensor-readings', [SensorReadingController::class, 'index']);
+Route::get('/sensor-readings/summary', [SensorReadingController::class, 'summary']);
+Route::get('/sensor-readings/history', [SensorReadingController::class, 'paginated']);
 Route::get('/sensor-readings/latest', [SensorReadingController::class, 'latest']);
 
 // Alerts — public read access
@@ -56,6 +58,7 @@ Route::get('/settings', [SettingController::class, 'index']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/sensor-readings', [SensorReadingController::class, 'store']);
+    Route::post('/buzzer-toggle', [SettingController::class, 'toggleBuzzer']);
 });
 
 // ---------------------------------------------------------------

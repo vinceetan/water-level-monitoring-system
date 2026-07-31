@@ -21,6 +21,10 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const data = await authApi.login(email, password);
+    if (data.user?.role !== 'admin') {
+      clearToken();
+      throw { data: { message: 'This account does not have admin access.' } };
+    }
     setToken(data.token);
     setUser(data.user);
     return data;
