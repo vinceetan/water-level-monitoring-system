@@ -1,0 +1,90 @@
+services:
+  # ── MySQL Database ──────────────────────────────────────
+  db:
+    image: mysql:8.0
+    container_name: wlms-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_DATABASE:-water_monitor}
+      MYSQL_USER: ${DB_USERNAME:-wlms_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-wlms_secret}
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:-rootpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - wlms-network
+
+  # ── Laravel API Backend ─────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: wlms-backend
+    restart: unless-stopped
+    environment:
+      APP_NAME: "Water Level Monitoring System"
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8000
+      APP_KEY: ${APP_KEY:-}
+      SANCTUM_STATEFUL_DOMAINS: "localhost:3000,localhost:8000,127.0.0.1:3000,127.0.0.1:8000"
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE:-water_monitor}
+      DB_USERNAME: ${DB_USERNAME:-wlms_user}
+      DB_PASSWORD: ${DB_PASSWORD:-wlms_secret}
+      SESSION_DRIVER: file
+      CACHE_STORE: file
+      QUEUE_CONNECTION: sync
+    volumes:
+      - ./data/backend/storage:/var/www/html/storage
+    ports:
+      - "8000:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - wlms-network
+
+  # ── React + Vite Frontend ───────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: wlms-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - wlms-network
+
+  # ── phpMyAdmin (Database GUI) ───────────────────────────
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: wlms-phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+    ports:
+      - "8080:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - wlms-network
+
+
+networks:
+  wlms-network:
+    driver: bridge

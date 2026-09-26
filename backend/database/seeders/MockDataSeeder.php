@@ -17,7 +17,8 @@ class MockDataSeeder extends Seeder
             ['email' => 'admin@example.com'],
             [
                 'full_name' => 'Admin',
-                'password' => Hash::make('password'),
+                'password' => 'password',
+                # 'password' => Hash::make('password'), //switch to this one if it doesnt work
             ]
         );
         if ($admin->role !== 'admin') {
