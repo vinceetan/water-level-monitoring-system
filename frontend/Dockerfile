@@ -12,6 +12,10 @@ RUN npm ci
 # Copy the rest of the source code
 COPY . .
 
+# Accept VITE_API_URL at build time for Vite bundling
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
+
 # Build the production bundle
 RUN npm run build
 
@@ -40,6 +44,16 @@ server {
     location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
         expires 1y;
         add_header Cache-Control "public, immutable";
+    }
+
+    # Proxy API requests to Laravel backend container internally
+    location /api {
+        proxy_pass http://backend:80;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     # SPA fallback — send all routes to index.html

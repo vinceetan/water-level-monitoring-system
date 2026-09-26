@@ -62,6 +62,7 @@ RUN php artisan package:discover --ansi || true
 # ---- Nginx config for reverse-proxying to PHP-FPM ----
 RUN cat <<'EOF' > /etc/nginx/http.d/default.conf
 server {
+    listen 8000;
     listen 80;
     server_name localhost;
     root /var/www/html/public;
@@ -112,6 +113,6 @@ stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
 EOF
 
-EXPOSE 80
+EXPOSE 8000 80
 
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
