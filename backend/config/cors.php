@@ -25,9 +25,13 @@ return [
         'http://localhost:5173',  // Vite dev server
         'http://localhost:5174',  // Vite dev server (fallback port)
         'http://localhost:3000',  // Alternative dev port
+        'http://localhost:82',    // Docker frontend port
+        'http://127.0.0.1:82',
     ],
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => [
+        '#^http(s)?://.*:82$#',  // Allows access from any host on port 82
+    ],
 
     'allowed_headers' => ['*'],
 
