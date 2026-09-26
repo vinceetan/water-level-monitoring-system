@@ -60,11 +60,11 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: /api
+        VITE_API_URL: http://18.142.190.113:8082/api
     container_name: wlms-frontend
     restart: unless-stopped
     environment:
-      VITE_API_URL: /api
+      VITE_API_URL: http://18.142.190.113:8082/api
     ports:
       - "82:80"
     depends_on:
