@@ -32,9 +32,9 @@ services:
       APP_NAME: "Water Level Monitoring System"
       APP_ENV: local
       APP_DEBUG: "true"
-      APP_URL: ${APP_URL:-http://18.142.190.113:8082}
+      APP_URL: ${APP_URL:-https://water-level-backend-system.coeofjrsmsu.com}
       APP_KEY: ${APP_KEY:-}
-      SANCTUM_STATEFUL_DOMAINS: "18.142.190.113:82,18.142.190.113:8082,localhost:82,localhost:8082,127.0.0.1:82,127.0.0.1:8082"
+      SANCTUM_STATEFUL_DOMAINS: "water-level-system.coeofjrmsu.com,water-level-backend-system.coeofjrsmsu.com,localhost,localhost:8080,localhost:8081,127.0.0.1,127.0.0.1:8080,127.0.0.1:8081"
       DB_CONNECTION: mysql
       DB_HOST: db
       DB_PORT: 3306
@@ -47,7 +47,7 @@ services:
     volumes:
       - ./data/backend/storage:/var/www/html/storage
     ports:
-      - "8082:80"
+      - "8081:80"
     depends_on:
       db:
         condition: service_healthy
@@ -60,13 +60,13 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: http://18.142.190.113:8082/api
+        VITE_API_URL: ${VITE_API_URL:-https://water-level-backend-system.coeofjrsmsu.com/api}
     container_name: wlms-frontend
     restart: unless-stopped
     environment:
-      VITE_API_URL: http://18.142.190.113:8082/api
+      VITE_API_URL: ${VITE_API_URL:-https://water-level-backend-system.coeofjrsmsu.com/api}
     ports:
-      - "82:80"
+      - "8080:80"
     depends_on:
       - backend
     networks:
@@ -81,7 +81,7 @@ services:
       PMA_HOST: db
       PMA_PORT: 3306
     ports:
-      - "8080:80"
+      - "8083:80"
     depends_on:
       db:
         condition: service_healthy
