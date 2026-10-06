@@ -18,9 +18,9 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 const char* ssid        = "WNFTTHHONEYTAN-2.4G";
 const char* password    = "scarlette*07";
-const char* apiUrl      = "http://18.142.190.113:8082/api";
+const char* apiUrl      = "https://water-level-backend-system.coeofjrmsu.com/api";
 const char* deviceCode  = "DEV-001";
-const char* bearerToken = "6|HCkRlwkh3iiXFSigc45kRzfqh7uMxGszS2WDX7PT50b32e17";
+const char* bearerToken = "3|KgCyl9ZFNiTX7uE4OM9buRwCH3ogV0oEfm9jbiOu883287b9";
 
 String smsTargetNumber = "+639972387323";
 
