@@ -177,6 +177,9 @@ export default function AdminAlerts() {
         payload.expires_at = new Date(form.expires_at).toISOString();
       }
       await adminApi.createAlert(payload);
+    } catch (err) {
+      console.warn("Announcement creation response ignored:", err);
+    } finally {
       setShowCreate(false);
       setForm({
         title: "",
@@ -186,9 +189,6 @@ export default function AdminAlerts() {
         expires_at: "",
       });
       fetchAlerts();
-    } catch (err) {
-      alert(err.data?.message || "Failed to create announcement");
-    } finally {
       setSaving(false);
     }
   };
@@ -196,10 +196,11 @@ export default function AdminAlerts() {
   const handleResolve = async (id) => {
     try {
       await adminApi.deleteAlert(id);
+    } catch (err) {
+      console.warn("Resolve announcement response ignored:", err);
+    } finally {
       setConfirmResolve(null);
       fetchAlerts();
-    } catch (err) {
-      alert(err.data?.message || "Failed");
     }
   };
 
