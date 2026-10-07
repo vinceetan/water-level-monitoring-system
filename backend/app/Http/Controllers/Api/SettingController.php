@@ -62,8 +62,14 @@ class SettingController extends Controller
 
         $settings->update($request->validated());
 
-        // Tell the ESP32 to restart on its next 1-second ping
-        \Illuminate\Support\Facades\Cache::put('restart_esp32', true, now()->addMinutes(2));
+        // Tell the ESP32 to restart on its next 1-second ping (non-critical)
+        try {
+            \Illuminate\Support\Facades\Cache::put('restart_esp32', true, now()->addMinutes(2));
+        } catch (\Throwable $e) {
+            // Cache write failed (e.g. missing storage/framework/cache directory) —
+            // log it but don't break the settings save.
+            \Illuminate\Support\Facades\Log::warning('Cache write failed for restart_esp32: ' . $e->getMessage());
+        }
 
         return response()->json([
             'message'  => 'Settings updated successfully.',

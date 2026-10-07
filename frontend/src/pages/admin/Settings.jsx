@@ -61,7 +61,7 @@ export default function AdminSettings() {
       }
     } catch (err) {
       hasError = true;
-      errorMsg += (err.response?.data?.message || 'Failed to update device. ') + ' ';
+      errorMsg += (err.data?.message || 'Failed to update device. ') + ' ';
     }
 
     try {
@@ -77,7 +77,7 @@ export default function AdminSettings() {
       setSettings(data.settings);
     } catch (err) {
       hasError = true;
-      errorMsg += (err.response?.data?.message || 'Failed to update settings.');
+      errorMsg += (err.data?.message || 'Failed to update settings.');
     }
 
     setSaving(false);
