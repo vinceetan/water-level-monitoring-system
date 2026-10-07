@@ -51,7 +51,7 @@ export default function AdminSettings() {
     setSaving(true);
     setError('');
     setSuccess('');
-    
+
     let hasError = false;
     let errorMsg = '';
 
@@ -129,15 +129,15 @@ export default function AdminSettings() {
       {error && <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-xl p-4 flex items-center gap-2"><i className="bx bx-error-circle text-lg"></i>{error}</div>}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        
+
         {/* ── Device Info Section ──────────────────────────────── */}
         {device && (
           <div className="bg-slate-800/60 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-5 md:p-7">
             <h2 className="text-lg font-bold text-white mb-1">Device Information</h2>
             <p className="text-slate-500 text-xs mb-5">Identify the physical sensor and its location on the dashboard.</p>
-            
+
             <div className="divide-y divide-slate-700/50 border-t border-slate-700/50">
-              
+
               {/* Device Name Row */}
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 py-4 md:py-5">
                 <div>
@@ -180,9 +180,9 @@ export default function AdminSettings() {
         <div className="bg-slate-800/60 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-5 md:p-7">
           <h2 className="text-lg font-bold text-white mb-1">System Thresholds</h2>
           <p className="text-slate-500 text-xs mb-5">Configure water level warnings, alerts, and reading intervals.</p>
-          
+
           <div className="divide-y divide-slate-700/50 border-t border-slate-700/50">
-            
+
             {fields.map(f => (
               <div key={f.key} className="flex flex-col md:flex-row md:items-center justify-between gap-3 py-4 md:py-5">
                 <div>
@@ -212,11 +212,10 @@ export default function AdminSettings() {
                 <button
                   type="button"
                   onClick={handleToggleBuzzer}
-                  className={`w-full md:w-32 px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-1.5 ${
-                    form.buzzer_enabled
+                  className={`w-full md:w-32 px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-1.5 ${form.buzzer_enabled
                       ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 shadow-lg shadow-emerald-500/10'
                       : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white hover:border-slate-600'
-                  }`}
+                    }`}
                 >
                   {form.buzzer_enabled ? (
                     <><i className="bx bx-check text-base"></i> Enabled</>
@@ -234,9 +233,9 @@ export default function AdminSettings() {
         <div className="bg-slate-800/60 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-5 md:p-7">
           <h2 className="text-lg font-bold text-white mb-1">Network & Alerts</h2>
           <p className="text-slate-500 text-xs mb-5">Configure SMS alert number. Changes apply on next device sync.</p>
-          
+
           <div className="divide-y divide-slate-700/50 border-t border-slate-700/50">
-            
+
             {/* SMS Target Number */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 py-4 md:py-5">
               <div>
