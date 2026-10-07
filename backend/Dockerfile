@@ -69,20 +69,7 @@ server {
 
     client_max_body_size 20M;
 
-    # Handle CORS preflight (OPTIONS) directly at Nginx level.
-    # This ensures preflight always gets proper CORS headers,
-    # even if Cloudflare or the admin reverse proxy strips them.
-    if ($request_method = OPTIONS) {
-        add_header 'Access-Control-Allow-Origin' $http_origin always;
-        add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, PATCH, OPTIONS' always;
-        add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization, Accept, X-Requested-With, Origin' always;
-        add_header 'Access-Control-Allow-Credentials' 'true' always;
-        add_header 'Access-Control-Max-Age' '86400' always;
-        add_header 'Content-Length' '0' always;
-        add_header 'Content-Type' 'text/plain' always;
-        return 204;
-    }
-
+   
     location / {
         try_files $uri $uri/ /index.php?$query_string;
     }
@@ -93,10 +80,6 @@ server {
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         include fastcgi_params;
 
-        # Add CORS headers to all PHP responses (including errors)
-        # so a 500 doesn't show up as a misleading CORS error in the browser.
-        add_header 'Access-Control-Allow-Origin' $http_origin always;
-        add_header 'Access-Control-Allow-Credentials' 'true' always;
     }
 
     location ~ /\.(?!well-known) {
