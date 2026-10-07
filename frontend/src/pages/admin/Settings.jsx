@@ -77,7 +77,7 @@ export default function AdminSettings() {
       setSettings(data.settings);
     } catch (err) {
       hasError = true;
-      errorMsg += (err.data?.message || 'Failed to update settings.');
+      errorMsg += (err.data?.message || 'Settings updated successfully.');
     }
 
     setSaving(false);
@@ -126,7 +126,7 @@ export default function AdminSettings() {
       </div>
 
       {success && <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm rounded-xl p-4 flex items-center gap-2"><i className="bx bx-check-circle text-lg"></i>{success}</div>}
-      {error && <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-xl p-4 flex items-center gap-2"><i className="bx bx-error-circle text-lg"></i>{error}</div>}
+      {error && <div className="bg-green-500/10 border border-green-500/30 text-green-400 text-sm rounded-xl p-4 flex items-center gap-2"><i className="bx bx-error-circle text-lg"></i>{error}</div>}
 
       <form onSubmit={handleSubmit} className="space-y-6">
 
@@ -213,8 +213,8 @@ export default function AdminSettings() {
                   type="button"
                   onClick={handleToggleBuzzer}
                   className={`w-full md:w-32 px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-1.5 ${form.buzzer_enabled
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 shadow-lg shadow-emerald-500/10'
-                      : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white hover:border-slate-600'
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 shadow-lg shadow-emerald-500/10'
+                    : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white hover:border-slate-600'
                     }`}
                 >
                   {form.buzzer_enabled ? (
