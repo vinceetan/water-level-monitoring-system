@@ -62,36 +62,12 @@ RUN php artisan package:discover --ansi || true
 # ---- Nginx config for reverse-proxying to PHP-FPM ----
 RUN cat <<'EOF' > /etc/nginx/http.d/default.conf
 server {
-    listen 8000;
     listen 80;
     server_name localhost;
     root /var/www/html/public;
     index index.php index.html;
 
     client_max_body_size 20M;
-
-    # ── CORS headers ──────────────────────────────────────
-    set $cors_origin '';
-    if ($http_origin ~* "^https?://(water-level-system\.coeofjrmsu\.com|water-level-backend-system\.coeofjrmsu\.com|localhost(:[0-9]+)?)$") {
-        set $cors_origin $http_origin;
-    }
-
-    add_header 'Access-Control-Allow-Origin' $cors_origin always;
-    add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
-    add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization, X-Requested-With, Accept, Origin, X-XSRF-TOKEN' always;
-    add_header 'Access-Control-Allow-Credentials' 'true' always;
-
-    # Handle preflight OPTIONS requests immediately
-    if ($request_method = 'OPTIONS') {
-        add_header 'Access-Control-Allow-Origin' $cors_origin always;
-        add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
-        add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization, X-Requested-With, Accept, Origin, X-XSRF-TOKEN' always;
-        add_header 'Access-Control-Allow-Credentials' 'true' always;
-        add_header 'Access-Control-Max-Age' 86400;
-        add_header 'Content-Length' 0;
-        add_header 'Content-Type' 'text/plain';
-        return 204;
-    }
 
     location / {
         try_files $uri $uri/ /index.php?$query_string;
@@ -136,6 +112,6 @@ stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
 EOF
 
-EXPOSE 8000 80
+EXPOSE 80
 
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
