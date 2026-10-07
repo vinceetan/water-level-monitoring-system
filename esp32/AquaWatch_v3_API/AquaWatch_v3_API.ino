@@ -16,8 +16,8 @@
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
-const char* ssid        = "WNFTTHHONEYTAN-2.4G";
-const char* password    = "scarlette*07";
+const char* ssid        = "FloodWatchWifi";
+const char* password    = "password";
 const char* apiUrl      = "https://water-level-backend-system.coeofjrmsu.com/api";
 const char* deviceCode  = "DEV-001";
 const char* bearerToken = "3|KgCyl9ZFNiTX7uE4OM9buRwCH3ogV0oEfm9jbiOu883287b9";
