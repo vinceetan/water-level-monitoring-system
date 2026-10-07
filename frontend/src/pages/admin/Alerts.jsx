@@ -80,8 +80,6 @@ export default function AdminAlerts() {
     title: "",
     message: "",
     severity: "WARNING",
-    expirationMode: "none", // 'none' | 'custom'
-    expires_at: "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -173,9 +171,6 @@ export default function AdminAlerts() {
         message: form.message,
         severity: form.severity,
       };
-      if (form.expirationMode === "custom" && form.expires_at) {
-        payload.expires_at = new Date(form.expires_at).toISOString();
-      }
       await adminApi.createAlert(payload);
     } catch (err) {
       console.warn("Announcement creation response ignored:", err);
@@ -185,8 +180,6 @@ export default function AdminAlerts() {
         title: "",
         message: "",
         severity: "WARNING",
-        expirationMode: "none",
-        expires_at: "",
       });
       fetchAlerts();
       setSaving(false);
@@ -615,49 +608,6 @@ export default function AdminAlerts() {
               </div>
             </div>
 
-            {/* Expiration */}
-            <div>
-              <label className="text-slate-400 text-sm block mb-1.5">
-                Expiration
-              </label>
-              <div className="flex gap-2 mb-3">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setForm({ ...form, expirationMode: "none", expires_at: "" })
-                  }
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all border ${
-                    form.expirationMode === "none"
-                      ? "bg-violet-500/20 text-violet-400 border-violet-500/40"
-                      : "bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-600 hover:text-white"
-                  }`}
-                >
-                  No Expiration
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, expirationMode: "custom" })}
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all border ${
-                    form.expirationMode === "custom"
-                      ? "bg-violet-500/20 text-violet-400 border-violet-500/40"
-                      : "bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-600 hover:text-white"
-                  }`}
-                >
-                  Custom Date & Time
-                </button>
-              </div>
-              {form.expirationMode === "custom" && (
-                <input
-                  type="datetime-local"
-                  value={form.expires_at}
-                  onChange={(e) =>
-                    setForm({ ...form, expires_at: e.target.value })
-                  }
-                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-2.5 text-sm focus:border-violet-500 focus:outline-none [color-scheme:dark]"
-                  required
-                />
-              )}
-            </div>
 
             {/* Buttons */}
             <div className="flex gap-3 pt-2">
