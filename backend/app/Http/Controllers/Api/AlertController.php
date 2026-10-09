@@ -118,7 +118,12 @@ class AlertController extends Controller
                 now()->addMinutes(10)
             );
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('Cache write failed for pending_manual_sms: ' . $e->getMessage());
+            // Silently ignore — cache failure must never crash the announcement
+            try {
+                \Illuminate\Support\Facades\Log::warning('Cache write failed for pending_manual_sms: ' . $e->getMessage());
+            } catch (\Throwable $logError) {
+                error_log('[WLMS] Cache write failed: ' . $e->getMessage());
+            }
         }
 
         return response()->json([
