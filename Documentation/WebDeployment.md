@@ -52,18 +52,18 @@ The `docker-compose.yml` file is the central orchestrator that wires all these c
   - Injects essential Laravel environment variables (like database credentials) directly from the compose configuration so it connects correctly to the `db` service.
   - Binds a volume (`./data/backend/storage`) for Laravel's storage folder, persisting logs and uploaded files.
   - Uses `depends_on` with a `condition: service_healthy` for the database. This ensures the backend will not attempt to start until MySQL is fully initialized and passing health checks.
-  - Maps host port 8082 to container port 80.
+  - Maps host port 8081 to container port 80.
 
 - **Frontend (`frontend`)**
   - Builds from the `frontend/Dockerfile`.
-  - Maps host port 82 to container port 80, making the web UI accessible.
+  - Maps host port 8080 to container port 80, making the web UI accessible.
   - Depends on the `backend` service starting up first.
 
 - **phpMyAdmin (`phpmyadmin`)**
   - Provides a web-based GUI for the database.
   - Connects securely to the `db` container over the shared Docker network.
   - Depends on the `db` service's health check.
-  - Maps host port 8080 to container port 80.
+  - Maps host port 8083 to container port 80.
 
 All services are configured with `restart: unless-stopped` to ensure high availability and automatic recovery upon system reboots or unexpected crashes.
 
@@ -75,8 +75,8 @@ To expose the application to the internet securely, an Nginx server was set up o
 
 - **Port Setup:** The host Nginx is configured to listen on the standard web ports (80 and 443 for SSL). 
 - **Traffic Routing:** 
-  - Requests to the main domain are proxied to the **Frontend container** running on local port `82`.
-  - Requests to the API domain are proxied to the **Backend container** running on local port `8082`.
+  - Requests to the main domain are proxied to the **Frontend container** running on local port `8080`.
+  - Requests to the API domain are proxied to the **Backend container** running on local port `8081`.
 - **SSL/TLS:** SSL certificates can be managed at this host Nginx layer (e.g., via Certbot), securing the connections before they are routed internally to the isolated Docker network.
 
 By using this reverse proxy on the host machine, you benefit from a centralized place to manage SSL certificates and domain routing, while keeping the internal application architecture containerized and isolated.

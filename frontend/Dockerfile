@@ -12,6 +12,10 @@ RUN npm ci
 # Copy the rest of the source code
 COPY . .
 
+# Build-time arg so VITE_ vars are baked into the bundle
+ARG VITE_API_URL
+ENV VITE_API_URL=${VITE_API_URL}
+
 # Build the production bundle
 RUN npm run build
 
