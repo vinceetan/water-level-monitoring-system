@@ -42,7 +42,7 @@ services:
       DB_USERNAME: ${DB_USERNAME:-wlms_user}
       DB_PASSWORD: ${DB_PASSWORD:-wlms_secret}
       SESSION_DRIVER: file
-      CACHE_STORE: file
+      CACHE_STORE: database
       QUEUE_CONNECTION: sync
     volumes:
       - ./data/backend/storage:/var/www/html/storage
