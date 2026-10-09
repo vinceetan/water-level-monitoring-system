@@ -110,12 +110,16 @@ class AlertController extends Controller
             'user:id,full_name',
         ]);
 
-        // Queue this for the ESP32 to send via GSM
-        \Illuminate\Support\Facades\Cache::put(
-            'pending_manual_sms', 
-            "ANNOUNCEMENT: {$alert->title} - {$alert->message}", 
-            now()->addMinutes(10)
-        );
+        // Queue this for the ESP32 to send via GSM (non-critical)
+        try {
+            \Illuminate\Support\Facades\Cache::put(
+                'pending_manual_sms', 
+                "ANNOUNCEMENT: {$alert->title} - {$alert->message}", 
+                now()->addMinutes(10)
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Cache write failed for pending_manual_sms: ' . $e->getMessage());
+        }
 
         return response()->json([
             'message' => 'Alert created successfully.',
