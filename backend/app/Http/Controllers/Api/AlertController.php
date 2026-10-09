@@ -112,18 +112,21 @@ class AlertController extends Controller
 
         // Queue this for the ESP32 to send via GSM (non-critical)
         try {
+            $smsMessage = "ANNOUNCEMENT: {$alert->title} - {$alert->message}";
+            $cacheDriver = config('cache.default');
+            error_log("[WLMS] Cache driver: {$cacheDriver} | Storing SMS: {$smsMessage}");
+            
             \Illuminate\Support\Facades\Cache::put(
                 'pending_manual_sms', 
-                "ANNOUNCEMENT: {$alert->title} - {$alert->message}", 
+                $smsMessage, 
                 now()->addMinutes(10)
             );
+            
+            // Verify write succeeded
+            $verify = \Illuminate\Support\Facades\Cache::get('pending_manual_sms');
+            error_log("[WLMS] Cache verify after put: " . ($verify ? 'SUCCESS' : 'FAILED'));
         } catch (\Throwable $e) {
-            // Silently ignore — cache failure must never crash the announcement
-            try {
-                \Illuminate\Support\Facades\Log::warning('Cache write failed for pending_manual_sms: ' . $e->getMessage());
-            } catch (\Throwable $logError) {
-                error_log('[WLMS] Cache write failed: ' . $e->getMessage());
-            }
+            error_log('[WLMS] Cache::put EXCEPTION: ' . $e->getMessage());
         }
 
         return response()->json([
