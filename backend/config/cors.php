@@ -27,6 +27,7 @@ return [
         'http://localhost:3000',  // Alternative dev port
         'http://localhost:8080',  // Docker frontend port
         'http://127.0.0.1:8080',
+        'https://water-level-system.coeofjrmsu.com',  // Production frontend
     ],
 
     'allowed_origins_patterns' => [
