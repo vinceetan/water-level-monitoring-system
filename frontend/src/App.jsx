@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { WaterLevelUnitProvider } from './context/WaterLevelUnitContext';
 
 // Layouts
 import CommunityLayout from './layouts/CommunityLayout';
@@ -40,7 +41,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
+        <WaterLevelUnitProvider>
+          <Routes>
           {/* Community (public) routes */}
           <Route element={<CommunityLayout />}>
             <Route path="/" element={<CommunityDashboard />} />
@@ -60,7 +62,8 @@ export default function App() {
             <Route path="/admin/users" element={<AdminUsers />} />
             <Route path="/admin/history" element={<AdminHistory />} />
           </Route>
-        </Routes>
+          </Routes>
+        </WaterLevelUnitProvider>
       </AuthProvider>
     </BrowserRouter>
   );

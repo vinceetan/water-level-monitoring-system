@@ -4,6 +4,7 @@
 //             LEDs on GPIO 2/4/16/32/33, Buzzer on GPIO 17
 //             Silence GPIO39, LCD I2C GPIO21/22
 //             GSM TX->GPIO25(RX2), GSM RX->GPIO26(TX2)
+//             Float switch GPIO27 (INPUT_PULLUP, other contact to GND)
 // ============================================================
 
 #include <WiFi.h>
@@ -35,6 +36,12 @@ const int WIFI_LED    = 33;
 const int BTN_SILENCE = 39;
 const int GSM_RX_PIN  = 25;
 const int GSM_TX_PIN  = 26;
+// Unused, has internal pull-up, not a boot-strap pin, not assigned above.
+const int FLOAT_SWITCH_PIN = 27;
+// Closed contact to GND reads LOW. Set true if activated/inactive are reversed.
+const bool FLOAT_SWITCH_INVERT = false;
+const unsigned long FLOAT_DEBOUNCE_MS = 50;
+const int FLOAT_STABLE_COUNT = 4;
 
 const float MIN_VALID_DISTANCE = 20.0;
 const float MAX_VALID_DISTANCE = 350.0;
@@ -68,8 +75,15 @@ bool          gsmReady           = false;
 bool          pendingRestart     = false;
 
 enum Status { SAFE, WARNING, CRITICAL };
-Status currentStatus = SAFE;
+Status currentStatus = SAFE;       // overall (LEDs / buzzer / SMS)
 Status pendingStatus = SAFE;
+Status measurementStatus = SAFE;   // continuous sensor only
+
+enum FloatSwitchState { FLOAT_INACTIVE, FLOAT_ACTIVATED, FLOAT_UNKNOWN };
+FloatSwitchState floatSwitchState = FLOAT_UNKNOWN;
+int rawFloatSample = HIGH;
+int floatStableCount = 0;
+unsigned long lastFloatSampleTime = 0;
 
 // ============================================================
 //  lcdPrint
@@ -358,12 +372,40 @@ void fetchSettings() {
 // ============================================================
 //  postReading
 // ============================================================
+const char* floatSwitchStatusName(FloatSwitchState state) {
+  switch (state) {
+    case FLOAT_ACTIVATED: return "activated";
+    case FLOAT_INACTIVE:  return "inactive";
+    default:              return "unknown";
+  }
+}
+
+void updateFloatSwitch() {
+  unsigned long now = millis();
+  if (now - lastFloatSampleTime < FLOAT_DEBOUNCE_MS) return;
+  lastFloatSampleTime = now;
+
+  int sample = digitalRead(FLOAT_SWITCH_PIN);
+  if (sample == rawFloatSample) {
+    if (floatStableCount < FLOAT_STABLE_COUNT) floatStableCount++;
+  } else {
+    rawFloatSample = sample;
+    floatStableCount = 1;
+  }
+
+  if (floatStableCount < FLOAT_STABLE_COUNT) return;
+
+  bool closed = (rawFloatSample == LOW);
+  if (FLOAT_SWITCH_INVERT) closed = !closed;
+  FloatSwitchState next = closed ? FLOAT_ACTIVATED : FLOAT_INACTIVE;
+  if (next != floatSwitchState) {
+    floatSwitchState = next;
+    Serial.printf("[FLOAT] %s\n", floatSwitchStatusName(floatSwitchState));
+  }
+}
+
 void postReading(float distance) {
   if (WiFi.status() != WL_CONNECTED) return;
-
-  float waterLevelPercent = ((sensorHeightCm - distance) / sensorHeightCm) * 100.0;
-  if (waterLevelPercent < 0)   waterLevelPercent = 0;
-  if (waterLevelPercent > 100) waterLevelPercent = 100;
 
   HTTPClient http;
   String url = String(apiUrl) + "/sensor-readings";
@@ -372,9 +414,17 @@ void postReading(float distance) {
   http.addHeader("Accept",        "application/json");
   http.addHeader("Authorization", "Bearer " + String(bearerToken));
 
-  String payload = "{\"device_code\":\"" + String(deviceCode) + "\"," +
-                   "\"distance_cm\":"         + String(distance, 1)         + "," +
-                   "\"water_level_percent\":" + String(waterLevelPercent, 1) + "}";
+  String payload = "{\"device_code\":\"" + String(deviceCode) + "\"";
+  if (distance >= 0) {
+    float waterLevelPercent = ((sensorHeightCm - distance) / sensorHeightCm) * 100.0;
+    if (waterLevelPercent < 0)   waterLevelPercent = 0;
+    if (waterLevelPercent > 100) waterLevelPercent = 100;
+    payload += ",\"distance_cm\":" + String(distance, 1);
+    payload += ",\"water_level_percent\":" + String(waterLevelPercent, 1);
+  }
+  payload += ",\"float_switch_status\":\"";
+  payload += floatSwitchStatusName(floatSwitchState);
+  payload += "\"}";
 
   int httpCode = http.POST(payload);
   if (httpCode > 0) {
@@ -576,6 +626,7 @@ void setup() {
   pinMode(POWER_LED,   OUTPUT);
   pinMode(WIFI_LED,    OUTPUT);
   pinMode(BTN_SILENCE, INPUT);
+  pinMode(FLOAT_SWITCH_PIN, INPUT_PULLUP);
 
   digitalWrite(TRIG_PIN,  LOW);
   digitalWrite(POWER_LED, HIGH);
@@ -587,6 +638,7 @@ void setup() {
   Serial.println("  GPIO25=GSM_RX  GPIO26=GSM_TX");
   Serial.println("  GPIO39=Silence");
   Serial.println("  GPIO21=SDA  GPIO22=SCL");
+  Serial.println("  GPIO27=FloatSwitch (INPUT_PULLUP)");
   Serial.println("============================================");
 
   startupTest();
@@ -603,8 +655,38 @@ void setup() {
 // ============================================================
 //  loop
 // ============================================================
+void applyOverallStatus() {
+  Status overall = (floatSwitchState == FLOAT_ACTIVATED) ? CRITICAL : measurementStatus;
+  if (overall == currentStatus) return;
+
+  currentStatus = overall;
+  applyStatus(currentStatus);
+
+  if (currentStatus == CRITICAL && !smsSentForCritical) {
+    if (floatSwitchState == FLOAT_ACTIVATED) {
+      sendGsmSms("FLOOD ALERT! Critical float switch activated. Evacuate low-lying areas immediately!");
+    } else {
+      float waterLevelCm = 0;
+      if (lastValidDistance > 0) {
+        waterLevelCm = sensorHeightCm - lastValidDistance;
+        if (waterLevelCm < 0) waterLevelCm = 0;
+      }
+      float waterLevelM = waterLevelCm / 100.0;
+      String smsMsg = "FLOOD ALERT! Water level at " + String(waterLevelM, 2) + "m (" + String(waterLevelCm, 1) + "cm). Evacuate low-lying areas immediately!";
+      sendGsmSms(smsMsg);
+    }
+    smsSentForCritical = true;
+  }
+
+  if (currentStatus != CRITICAL) {
+    smsSentForCritical = false;
+  }
+}
+
 void loop() {
   checkButtons();
+  updateFloatSwitch();
+  applyOverallStatus();
 
   if (WiFi.status() != WL_CONNECTED) {
     digitalWrite(WIFI_LED, LOW);
@@ -623,23 +705,35 @@ void loop() {
   lastReadTime = millis();
 
   float distance = readDistance();
+  bool distanceValid = true;
 
   if (distance < 0) {
     Serial.println("[SENSOR] No echo — keeping previous reading");
-    return;
-  }
-  if (distance < MIN_VALID_DISTANCE) {
+    distanceValid = false;
+  } else if (distance < MIN_VALID_DISTANCE) {
     Serial.printf("[SENSOR] Too close (%.1f cm) — in blind zone, ignored\n", distance);
-    return;
-  }
-  if (distance > MAX_VALID_DISTANCE) {
+    distanceValid = false;
+  } else if (distance > MAX_VALID_DISTANCE) {
     Serial.println("[SENSOR] Out of range — ignored");
-    return;
-  }
-  if (lastValidDistance > 0 && abs(distance - lastValidDistance) > MAX_JUMP) {
+    distanceValid = false;
+  } else if (lastValidDistance > 0 && abs(distance - lastValidDistance) > MAX_JUMP) {
     Serial.printf("[SENSOR] Jump ignored: %.1f cm\n", distance);
+    distanceValid = false;
+  }
+
+  if (!distanceValid) {
+    postReading(-1);
+    if (pendingRestart) {
+      pendingRestart = false;
+      Serial.println("\n[API] Admin requested ESP32 Restart via Settings Save!");
+      fetchSettings();
+      lcdCentered("Settings Saved", "Restarting...");
+      delay(2000);
+      ESP.restart();
+    }
     return;
   }
+
   lastValidDistance = distance;
 
   float waterLevelCm = sensorHeightCm - distance;
@@ -660,32 +754,27 @@ void loop() {
     stableCounter = 1;
   }
 
-  if (stableCounter >= REQUIRED_READINGS && currentStatus != pendingStatus) {
-    currentStatus = pendingStatus;
-    applyStatus(currentStatus);
-
-    if (currentStatus == CRITICAL && !smsSentForCritical) {
-      float waterLevelM = waterLevelCm / 100.0;
-      String smsMsg = "FLOOD ALERT! Water level at " + String(waterLevelM, 2) + "m (" + String(waterLevelCm, 1) + "cm). Evacuate low-lying areas immediately!";
-      sendGsmSms(smsMsg);
-      smsSentForCritical = true;
-    }
-
-    if (currentStatus != CRITICAL) {
-      smsSentForCritical = false;
-    }
+  if (stableCounter >= REQUIRED_READINGS && measurementStatus != pendingStatus) {
+    measurementStatus = pendingStatus;
+    applyOverallStatus();
   }
 
   postReading(distance);
 
   updateLCD(waterLevelCm);
-  Serial.printf("[DATA] Water Level: %.1f cm | Distance: %.1f cm | Status: ", waterLevelCm, distance);
+  Serial.printf("[DATA] Water Level: %.1f cm | Distance: %.1f cm | Measure: ", waterLevelCm, distance);
+  switch (measurementStatus) {
+    case SAFE:     Serial.print("SAFE");     break;
+    case WARNING:  Serial.print("WARNING");  break;
+    case CRITICAL: Serial.print("CRITICAL"); break;
+  }
+  Serial.printf(" | Overall: ");
   switch (currentStatus) {
     case SAFE:     Serial.print("SAFE");     break;
     case WARNING:  Serial.print("WARNING");  break;
     case CRITICAL: Serial.print("CRITICAL"); break;
   }
-  Serial.printf(" | Stable: %d/%d\n", stableCounter, REQUIRED_READINGS);
+  Serial.printf(" | Float: %s | Stable: %d/%d\n", floatSwitchStatusName(floatSwitchState), stableCounter, REQUIRED_READINGS);
   Serial.println("----------------------------------------");
 
   // Handle pending restart safely outside of active HTTP connections

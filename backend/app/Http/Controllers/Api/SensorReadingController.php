@@ -8,8 +8,10 @@ use App\Models\Alert;
 use App\Models\Device;
 use App\Models\SensorReading;
 use App\Models\Setting;
+use App\Services\WaterAlertState;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class SensorReadingController extends Controller
 {
@@ -210,18 +212,26 @@ class SensorReadingController extends Controller
                 ->latest()
                 ->first();
 
+            $floatSwitchStatus = $this->currentFloatSwitchStatus($device);
+
             return [
-                'device_id'           => $device->id,
-                'device_name'         => $device->device_name,
-                'device_code'         => $device->device_code,
-                'location'            => $device->location,
-                'device_status'       => $device->status,
-                'last_seen'           => $device->last_seen,
-                'water_level_cm'      => $latestReading?->water_level_cm,
-                'water_level_percent' => $latestReading?->water_level_percent,
-                'distance_cm'         => $latestReading?->distance_cm,
-                'status'              => $latestReading?->status,
-                'reading_at'          => $latestReading?->created_at,
+                'device_id'            => $device->id,
+                'device_name'          => $device->device_name,
+                'device_code'          => $device->device_code,
+                'location'             => $device->location,
+                'device_status'        => $device->status,
+                'last_seen'            => $device->last_seen,
+                'water_level_cm'       => $latestReading?->water_level_cm,
+                'water_level_percent'  => $latestReading?->water_level_percent,
+                'distance_cm'          => $latestReading?->distance_cm,
+                'status'               => $latestReading?->status,
+                'measurement_status'   => $latestReading?->status,
+                'float_switch_status'  => $floatSwitchStatus,
+                'overall_alert_state'  => WaterAlertState::overallAlertState(
+                    $latestReading?->status,
+                    $floatSwitchStatus
+                ),
+                'reading_at'           => $latestReading?->created_at,
             ];
         });
 
@@ -255,93 +265,86 @@ class SensorReadingController extends Controller
             ], 403);
         }
 
-        // Calculate water_level_cm
         $settings = Setting::first();
-        $sensorHeight = $settings?->sensor_height_cm ?? 300.0;
-        $waterLevelCm = max(0, $sensorHeight - $request->distance_cm);
+        $reading = null;
+        $status = null;
+        $waterLevelCm = null;
 
-        // Determine the water level status based on settings thresholds
-        $status = $this->determineStatus($waterLevelCm, $settings);
+        if ($request->filled('distance_cm')) {
+            $sensorHeight = $settings?->sensor_height_cm ?? 300.0;
+            $waterLevelCm = max(0, $sensorHeight - (float) $request->distance_cm);
+            $status = $this->determineStatus($waterLevelCm, $settings);
 
-        $lastReading = SensorReading::where('device_id', $device->id)
-            ->latest('created_at')
-            ->first();
+            $lastReading = SensorReading::where('device_id', $device->id)
+                ->latest('created_at')
+                ->first();
 
-        $shouldUpdate = false;
-        if ($lastReading && $lastReading->status === $status) {
-            $timeSinceLast = $lastReading->created_at->diffInMinutes(now());
-            if ($timeSinceLast < 5) {
-                $shouldUpdate = true;
+            $shouldUpdate = false;
+            if ($lastReading && $lastReading->status === $status) {
+                $timeSinceLast = $lastReading->created_at->diffInMinutes(now());
+                if ($timeSinceLast < 5) {
+                    $shouldUpdate = true;
+                }
+            }
+
+            if ($shouldUpdate) {
+                $lastReading->update([
+                    'distance_cm'         => $request->distance_cm,
+                    'water_level_cm'      => $waterLevelCm,
+                    'water_level_percent' => $request->water_level_percent,
+                ]);
+                $reading = $lastReading;
+            } else {
+                $reading = SensorReading::create([
+                    'device_id'           => $device->id,
+                    'distance_cm'         => $request->distance_cm,
+                    'water_level_cm'      => $waterLevelCm,
+                    'water_level_percent' => $request->water_level_percent,
+                    'status'              => $status,
+                ]);
             }
         }
 
-        if ($shouldUpdate) {
-            // Update the existing point with latest values (throttling inserts to 1 per 5 mins)
-            $lastReading->update([
-                'distance_cm'         => $request->distance_cm,
-                'water_level_cm'      => $waterLevelCm,
-                'water_level_percent' => $request->water_level_percent,
-                // updated_at auto-updates, created_at remains the start of the 5-min window
-            ]);
-            $reading = $lastReading;
-        } else {
-            // Create a new reading point (status changed, or >5 mins passed)
-            $reading = SensorReading::create([
-                'device_id'           => $device->id,
-                'distance_cm'         => $request->distance_cm,
-                'water_level_cm'      => $waterLevelCm,
-                'water_level_percent' => $request->water_level_percent,
-                'status'              => $status,
-            ]);
-        }
-
-        // Update the device: mark as online and record last contact time
         $device->update([
             'status'    => 'online',
             'last_seen' => now(),
         ]);
 
-        // Auto-resolve "Connection Lost" alerts
         Alert::where('device_id', $device->id)
             ->where('title', 'Connection Lost')
             ->where('is_active', true)
             ->update(['is_active' => false]);
 
-        // Auto-resolve water level alerts if the status is SAFE
         if ($status === 'SAFE') {
-            Alert::where('device_id', $device->id)
-                ->where('alert_type', 'SYSTEM')
+            $this->waterLevelAlertsQuery($device)
                 ->where('is_active', true)
                 ->update(['is_active' => false]);
-        } 
-        // If WARNING, auto-resolve any CRITICAL alerts (downgrade)
-        elseif ($status === 'WARNING') {
-            Alert::where('device_id', $device->id)
-                ->where('alert_type', 'SYSTEM')
+        } elseif ($status === 'WARNING') {
+            $this->waterLevelAlertsQuery($device)
                 ->where('severity', 'CRITICAL')
                 ->where('is_active', true)
                 ->update(['is_active' => false]);
             $this->generateSystemAlert($device, $status, $waterLevelCm);
-        }
-        // If CRITICAL, auto-resolve any WARNING alerts (upgrade)
-        elseif ($status === 'CRITICAL') {
-            Alert::where('device_id', $device->id)
-                ->where('alert_type', 'SYSTEM')
+        } elseif ($status === 'CRITICAL') {
+            $this->waterLevelAlertsQuery($device)
                 ->where('severity', 'WARNING')
                 ->where('is_active', true)
                 ->update(['is_active' => false]);
             $this->generateSystemAlert($device, $status, $waterLevelCm);
         }
 
-        $pendingSms = \Illuminate\Support\Facades\Cache::pull('pending_manual_sms');
-        $restartEsp32 = \Illuminate\Support\Facades\Cache::pull('restart_esp32');
+        $floatSwitchStatus = $this->syncFloatSwitch($device, $request->input('float_switch_status'));
+
+        $pendingSms = Cache::pull('pending_manual_sms');
+        $restartEsp32 = Cache::pull('restart_esp32');
 
         return response()->json([
-            'message'        => 'Reading saved successfully.',
-            'reading'        => $reading,
-            'buzzer_enabled' => (bool) ($settings?->buzzer_enabled ?? true),
-            'pending_sms'    => $pendingSms,
-            'restart_esp32'  => (bool) $restartEsp32
+            'message'             => $reading ? 'Reading saved successfully.' : 'Float switch status updated.',
+            'reading'             => $reading,
+            'float_switch_status' => $floatSwitchStatus,
+            'buzzer_enabled'      => (bool) ($settings?->buzzer_enabled ?? true),
+            'pending_sms'         => $pendingSms,
+            'restart_esp32'       => (bool) $restartEsp32
         ], 201);
     }
 
@@ -353,19 +356,79 @@ class SensorReadingController extends Controller
      */
     private function determineStatus(float $waterLevelCm, ?Setting $settings): string
     {
-        // Fallback defaults if no settings row exists yet
-        $warningLevel  = $settings?->warning_level_cm ?? 200.0;
-        $criticalLevel = $settings?->critical_level_cm ?? 250.0;
+        $warningLevel  = (float) ($settings?->warning_level_cm ?? 200.0);
+        $criticalLevel = (float) ($settings?->critical_level_cm ?? 250.0);
 
-        if ($waterLevelCm >= $criticalLevel) {
-            return 'CRITICAL';
+        return WaterAlertState::measurementStatus($waterLevelCm, $warningLevel, $criticalLevel);
+    }
+
+    private function waterLevelAlertsQuery(Device $device)
+    {
+        return Alert::where('device_id', $device->id)
+            ->where('alert_type', 'SYSTEM')
+            ->where('title', '!=', WaterAlertState::FLOAT_ALERT_TITLE);
+    }
+
+    private function currentFloatSwitchStatus(Device $device): string
+    {
+        $cached = Cache::get(WaterAlertState::cacheKey($device->id));
+        if (! is_array($cached) || empty($cached['status'])) {
+            return WaterAlertState::FLOAT_UNKNOWN;
         }
 
-        if ($waterLevelCm >= $warningLevel) {
-            return 'WARNING';
+        if ($device->status !== 'online') {
+            return WaterAlertState::FLOAT_UNKNOWN;
         }
 
-        return 'SAFE';
+        return WaterAlertState::normalizeFloatSwitchStatus($cached['status']);
+    }
+
+    private function syncFloatSwitch(Device $device, mixed $rawStatus): string
+    {
+        if ($rawStatus === null || $rawStatus === '') {
+            return $this->currentFloatSwitchStatus($device);
+        }
+
+        $status = WaterAlertState::normalizeFloatSwitchStatus($rawStatus);
+
+        Cache::put(WaterAlertState::cacheKey($device->id), [
+            'status'     => $status,
+            'updated_at' => now()->toIso8601String(),
+        ], now()->addMinutes(2));
+
+        if ($status === WaterAlertState::FLOAT_ACTIVATED) {
+            $this->generateFloatSwitchAlert($device);
+        } elseif ($status === WaterAlertState::FLOAT_INACTIVE) {
+            Alert::where('device_id', $device->id)
+                ->where('alert_type', 'SYSTEM')
+                ->where('title', WaterAlertState::FLOAT_ALERT_TITLE)
+                ->where('is_active', true)
+                ->update(['is_active' => false]);
+        }
+
+        return $status;
+    }
+
+    private function generateFloatSwitchAlert(Device $device): void
+    {
+        $existingAlert = Alert::where('device_id', $device->id)
+            ->where('alert_type', 'SYSTEM')
+            ->where('title', WaterAlertState::FLOAT_ALERT_TITLE)
+            ->where('is_active', true)
+            ->first();
+
+        if ($existingAlert) {
+            return;
+        }
+
+        Alert::create([
+            'device_id'  => $device->id,
+            'title'      => WaterAlertState::FLOAT_ALERT_TITLE,
+            'message'    => "CRITICAL alert triggered by the float switch at {$device->device_name} ({$device->location}). The continuous water-level measurement was not changed.",
+            'alert_type' => 'SYSTEM',
+            'severity'   => 'CRITICAL',
+            'is_active'  => true,
+        ]);
     }
 
     /**
@@ -379,8 +442,7 @@ class SensorReadingController extends Controller
     private function generateSystemAlert(Device $device, string $status, float $waterLevelCm): void
     {
         // Check for an existing active alert of the same severity for this device
-        $existingAlert = Alert::where('device_id', $device->id)
-            ->where('alert_type', 'SYSTEM')
+        $existingAlert = $this->waterLevelAlertsQuery($device)
             ->where('severity', $status)
             ->where('is_active', true)
             ->first();
