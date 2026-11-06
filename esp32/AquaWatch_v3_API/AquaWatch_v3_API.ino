@@ -21,7 +21,7 @@ const char* ssid        = "WNFTTHHONEYTAN-2.4G";
 const char* password    = "scarlette*07";
 const char* apiUrl      = "http://10.219.219.113:8000/api";
 const char* deviceCode  = "DEV-001";
-const char* bearerToken = "14|co1eiqewtd75ejjEfgi6JfMZFdCTlmrHml7Q1NTn";
+const char* bearerToken = "1|V6OfHiyrApVQevadarhTIL60tnnQY5ubjRVgXvYPf4bf63ee";
 
 String smsTargetNumber = "+639972387323";
 
@@ -416,9 +416,17 @@ void postReading(float distance) {
 
   String payload = "{\"device_code\":\"" + String(deviceCode) + "\"";
   if (distance >= 0) {
-    float waterLevelPercent = ((sensorHeightCm - distance) / sensorHeightCm) * 100.0;
+    float waterLevelCm = sensorHeightCm - distance;
+    float usableRange = sensorHeightCm - MIN_VALID_DISTANCE;
+    float waterLevelPercent = (waterLevelCm / usableRange) * 100.0;
     if (waterLevelPercent < 0)   waterLevelPercent = 0;
     if (waterLevelPercent > 100) waterLevelPercent = 100;
+
+    // Float switch override: force 100% when activated
+    if (floatSwitchState == FLOAT_ACTIVATED) {
+      waterLevelPercent = 100.0;
+    }
+
     payload += ",\"distance_cm\":" + String(distance, 1);
     payload += ",\"water_level_percent\":" + String(waterLevelPercent, 1);
   }
@@ -722,7 +730,18 @@ void loop() {
   }
 
   if (!distanceValid) {
-    postReading(-1);
+    // Float switch override: if sensor can't read but float switch is triggered,
+    // send 100% CRITICAL reading instead of an empty one
+    if (floatSwitchState == FLOAT_ACTIVATED) {
+      Serial.println("[FLOAT] Sensor in blind zone but float switch ACTIVATED — reporting 100%");
+      // Use minimum valid distance (sensor height = max water) for the override
+      postReading(MIN_VALID_DISTANCE);
+      updateLCD(sensorHeightCm);
+      Serial.printf("[DATA] Water Level: %.1f cm (FLOAT OVERRIDE) | Overall: CRITICAL | Float: activated\n", sensorHeightCm);
+      Serial.println("----------------------------------------");
+    } else {
+      postReading(-1);
+    }
     if (pendingRestart) {
       pendingRestart = false;
       Serial.println("\n[API] Admin requested ESP32 Restart via Settings Save!");

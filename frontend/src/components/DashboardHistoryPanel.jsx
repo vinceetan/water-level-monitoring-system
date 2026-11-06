@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   LineChart,
@@ -10,8 +10,6 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { publicApi } from "../api/api";
-import useWaterLevelUnit from "../hooks/useWaterLevelUnit";
-import { cmToDisplay, formatLevelFromCm, unitSuffix } from "../utils/waterLevel";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -57,26 +55,22 @@ function getCalendarDays(year, month) {
   return days;
 }
 
-function buildDayChartData(readings, unit) {
+function buildDayChartData(readings) {
   return readings
     .map((r) => {
       const rd = new Date(r.created_at);
-      const cm = parseFloat(r.water_level_cm);
       return {
         label: rd.toLocaleTimeString("en-US", {
           hour: "2-digit",
           minute: "2-digit",
           hour12: false,
         }),
-        value: Number.isFinite(cm) ? cmToDisplay(cm, unit) : null,
-        water_level_cm: cm,
+        value: parseFloat(r.water_level_cm) / 100,
       };
-    })
-    .filter((row) => row.value !== null);
+    });
 }
 
 export default function DashboardHistoryPanel({ backLink = "/" }) {
-  const [unit] = useWaterLevelUnit();
   const today = startOfDay(new Date());
   const [selectedDate, setSelectedDate] = useState(today);
   const [baseWeekDate, setBaseWeekDate] = useState(today);
@@ -117,13 +111,14 @@ export default function DashboardHistoryPanel({ backLink = "/" }) {
     });
   }
 
-  const chartData = buildDayChartData(historicalReadings, unit);
-  const avgCm =
-    historicalReadings.length > 0
-      ? historicalReadings.reduce((acc, curr) => acc + (parseFloat(curr.water_level_cm) || 0), 0) /
-        historicalReadings.length
-      : null;
-  const avgWaterLevel = avgCm !== null ? formatLevelFromCm(avgCm, unit) : "—";
+  const chartData = buildDayChartData(historicalReadings);
+
+  const avgWaterLevel =
+    chartData.length > 0
+      ? (
+          chartData.reduce((acc, curr) => acc + curr.value, 0) / chartData.length
+        ).toFixed(2)
+      : "0.00";
 
   const currentMonthName = baseWeekDate
     .toLocaleDateString("en-US", { month: "long" })
@@ -486,7 +481,7 @@ export default function DashboardHistoryPanel({ backLink = "/" }) {
                 axisLine={false}
                 tickLine={false}
                 tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 500 }}
-                tickFormatter={(val) => `${val}${unitSuffix(unit)}`}
+                tickFormatter={(val) => `${val}m`}
               />
               <Tooltip
                 cursor={{
@@ -503,7 +498,7 @@ export default function DashboardHistoryPanel({ backLink = "/" }) {
                 labelStyle={{ fontWeight: "bold", color: "#e2e8f0" }}
                 itemStyle={{ color: "#22d3ee" }}
                 formatter={(value) => [
-                  `${Number(value).toFixed(unit === "mm" ? 0 : 2)} ${unitSuffix(unit)}`,
+                  `${Number(value).toFixed(2)}m`,
                   "Water Level",
                 ]}
               />
@@ -530,6 +525,7 @@ export default function DashboardHistoryPanel({ backLink = "/" }) {
       <div className="py-6 flex flex-col items-center justify-center border-t border-slate-800 bg-slate-950/50">
         <h3 className="text-3xl font-medium text-slate-200 tracking-tight">
           {avgWaterLevel}
+          <span className="text-xl ml-1 text-slate-500">m</span>
         </h3>
         <p className="text-[10px] font-bold tracking-[0.2em] text-slate-500 uppercase mt-1">
           Avg Water Level
