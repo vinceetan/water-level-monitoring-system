@@ -60,10 +60,23 @@ class SettingController extends Controller
             ], 404);
         }
 
-        $settings->update($request->validated());
+        $validated = $request->validated();
 
-        // Tell the ESP32 to restart on its next 1-second ping
-        \Illuminate\Support\Facades\Cache::put('restart_esp32', true, now()->addMinutes(2));
+        // Check if any setting OTHER than buzzer_enabled changed
+        $restartNeeded = false;
+        foreach ($validated as $key => $value) {
+            if ($key !== 'buzzer_enabled' && (string) $settings->$key !== (string) $value) {
+                $restartNeeded = true;
+                break;
+            }
+        }
+
+        $settings->update($validated);
+
+        // Only tell the ESP32 to restart when non-buzzer settings change
+        if ($restartNeeded) {
+            \Illuminate\Support\Facades\Cache::put('restart_esp32', true, now()->addMinutes(2));
+        }
 
         return response()->json([
             'message'  => 'Settings updated successfully.',

@@ -1,9 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import StatusBadge from '../../components/StatusBadge';
 import { publicApi } from '../../api/api';
-import useWaterLevelUnit from '../../hooks/useWaterLevelUnit';
-import { cmToDisplay, formatLevelFromCm, unitSuffix } from '../../utils/waterLevel';
 
 /* ── Helper: format a Date to YYYY-MM-DD ─────────────────────────── */
 function fmt(d) {
@@ -49,7 +47,6 @@ function getPresetRange(preset) {
 /*  AdminHistory — Analytics Dashboard                               */
 /* ═══════════════════════════════════════════════════════════════════ */
 export default function AdminHistory() {
-  const [unit] = useWaterLevelUnit();
   // ── Filters ──
   const [datePreset, setDatePreset] = useState('today');
   const [customFrom, setCustomFrom] = useState('');
@@ -105,7 +102,7 @@ export default function AdminHistory() {
           time: new Date(r.created_at).toLocaleString('en-PH', {
             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
           }),
-          water_level_cm: parseFloat(r.water_level_cm),
+          water_level: parseFloat(r.water_level_cm) / 100,
           status: r.status,
         }));
         setChartData(mapped);
@@ -165,22 +162,13 @@ export default function AdminHistory() {
     );
   }
 
-  const displayedChartData = useMemo(
-    () =>
-      chartData.map((row) => ({
-        ...row,
-        water_level: Number.isFinite(row.water_level_cm) ? cmToDisplay(row.water_level_cm, unit) : null,
-      })),
-    [chartData, unit],
-  );
-
   /* ── Chart tooltip ─────────────────────────────────────────────── */
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload?.[0]) {
       const d = payload[0].payload;
       return (
         <div className="bg-slate-800 border border-slate-700 rounded-xl p-3 shadow-2xl">
-          <p className="text-white font-semibold text-sm">{formatLevelFromCm(d.water_level_cm, unit)}</p>
+          <p className="text-white font-semibold text-sm">{d.water_level.toFixed(2)} m</p>
           <p className="text-slate-400 text-xs mt-0.5">{d.time}</p>
           <div className="mt-1"><StatusBadge status={d.status} /></div>
         </div>
@@ -340,7 +328,7 @@ export default function AdminHistory() {
         ) : chartData.length > 0 ? (
           <div className="w-full overflow-hidden">
             <ResponsiveContainer width="100%" height={320}>
-              <AreaChart data={displayedChartData}>
+              <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="analyticsGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3} />
@@ -363,7 +351,7 @@ export default function AdminHistory() {
                   fontSize={11}
                   tickLine={false}
                   axisLine={false}
-                  unit={` ${unitSuffix(unit)}`}
+                  unit=" m"
                   width={45}
                 />
                 <Tooltip content={<CustomTooltip />} />
@@ -420,7 +408,7 @@ export default function AdminHistory() {
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <p className="text-white font-semibold text-lg">
-                          {formatLevelFromCm(r.water_level_cm, unit)}
+                            {(parseFloat(r.water_level_cm) / 100).toFixed(2)} m
                           </p>
                           <div className="flex items-center gap-2 mt-1">
                             <span className="text-slate-400 text-xs">{dt.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
@@ -478,7 +466,7 @@ export default function AdminHistory() {
                           {dt.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}
                         </td>
                         <td className="px-3 md:px-5 py-2.5 md:py-3.5 text-white font-semibold whitespace-nowrap">
-                          {formatLevelFromCm(r.water_level_cm, unit)}
+                          {(parseFloat(r.water_level_cm) / 100).toFixed(2)} m
                         </td>
                         <td className="px-3 md:px-5 py-2.5 md:py-3.5">
                           <StatusBadge status={r.status} />

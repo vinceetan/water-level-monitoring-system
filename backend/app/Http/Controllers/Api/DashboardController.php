@@ -7,9 +7,7 @@ use App\Models\Alert;
 use App\Models\Device;
 use App\Models\SensorReading;
 use App\Models\Setting;
-use App\Services\WaterAlertState;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Cache;
 
 class DashboardController extends Controller
 {
@@ -39,25 +37,16 @@ class DashboardController extends Controller
                 ->latest()
                 ->first();
 
-            $cachedFloat = Cache::get(WaterAlertState::cacheKey($device->id));
-            $floatSwitchStatus = ($device->status === 'online' && is_array($cachedFloat))
-                ? WaterAlertState::normalizeFloatSwitchStatus($cachedFloat['status'] ?? null)
-                : WaterAlertState::FLOAT_UNKNOWN;
-
             return [
-                'device_id'            => $device->id,
-                'device_name'          => $device->device_name,
-                'location'             => $device->location,
-                'device_status'        => $device->status,
-                'last_seen'            => $device->last_seen,
-                'water_level_cm'       => $latest?->water_level_cm,
-                'water_level_percent'  => $latest?->water_level_percent,
-                'distance_cm'          => $latest?->distance_cm,
-                'status'               => $latest?->status,
-                'measurement_status'   => $latest?->status,
-                'float_switch_status'  => $floatSwitchStatus,
-                'overall_alert_state'  => WaterAlertState::overallAlertState($latest?->status, $floatSwitchStatus),
-                'reading_at'           => $latest?->created_at,
+                'device_id'           => $device->id,
+                'device_name'         => $device->device_name,
+                'location'            => $device->location,
+                'device_status'       => $device->status,
+                'last_seen'           => $device->last_seen,
+                'water_level_percent' => $latest?->water_level_percent,
+                'distance_cm'         => $latest?->distance_cm,
+                'status'              => $latest?->status,
+                'reading_at'          => $latest?->created_at,
             ];
         });
 
