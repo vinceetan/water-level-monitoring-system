@@ -30,10 +30,10 @@ class StoreSensorReadingRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'device_code'         => ['required', 'string', 'exists:devices,device_code'],
-            'distance_cm'         => ['required', 'numeric', 'min:0', 'max:9999.99'],
-            'water_level_percent' => ['required', 'numeric', 'min:0', 'max:100'],
-            'float_switch_status' => ['sometimes', 'string', 'in:activated,inactive,unknown'],
+            'device_code'          => ['required', 'string', 'exists:devices,device_code'],
+            'distance_cm'          => ['nullable', 'numeric', 'min:0', 'max:9999.99', 'required_with:water_level_percent'],
+            'water_level_percent'  => ['nullable', 'numeric', 'min:0', 'max:100', 'required_with:distance_cm'],
+            'float_switch_status'  => ['nullable', 'string', 'in:inactive,activated,unknown'],
         ];
     }
 
@@ -45,6 +45,16 @@ class StoreSensorReadingRequest extends FormRequest
         return [
             'device_code.exists' => 'Device not found. Check your device_code.',
             'distance_cm.max'    => 'distance_cm exceeds maximum (9999.99).',
+            'float_switch_status.in' => 'float_switch_status must be inactive, activated, or unknown.',
         ];
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            if (! $this->filled('distance_cm') && ! $this->filled('float_switch_status')) {
+                $validator->errors()->add('distance_cm', 'A distance reading or float_switch_status is required.');
+            }
+        });
     }
 }
