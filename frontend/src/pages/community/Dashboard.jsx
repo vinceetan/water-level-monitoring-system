@@ -255,14 +255,13 @@ export default function CommunityDashboard() {
           >
             <div className="flex items-center gap-2 text-[22px] font-bold drop-shadow-sm">
               <i className="bx bx-water text-xl opacity-90"></i>
-              {unit === "m"
-                ? `${((highestDevice?.water_level_cm || 0) / 100).toFixed(2)}m`
-                : unit === "cm"
-                  ? `${(highestDevice?.water_level_cm || 0).toFixed(1)}cm`
-                  : unit === "ft"
-                    ? `${((highestDevice?.water_level_cm || 0) / 30.48).toFixed(2)}ft`
-                    : `${((highestDevice?.water_level_cm || 0) / 2.54).toFixed(1)}in`
-              }
+              {(() => {
+                const cm = parseFloat(highestDevice?.water_level_cm) || 0;
+                if (unit === "m") return `${(cm / 100).toFixed(2)}m`;
+                if (unit === "cm") return `${cm.toFixed(1)}cm`;
+                if (unit === "ft") return `${(cm / 30.48).toFixed(2)}ft`;
+                return `${(cm / 2.54).toFixed(1)}in`;
+              })()}
             </div>
             <span className="text-[11px] font-medium tracking-wider text-white/80 uppercase mt-1">
               Water Level · <span className="text-white/50">{unit}</span>
