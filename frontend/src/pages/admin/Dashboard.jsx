@@ -250,7 +250,7 @@ export default function AdminDashboard() {
           </div>
           <div
             className="px-10 flex flex-col items-center cursor-pointer hover:opacity-80 transition select-none"
-            onClick={() => setUnit(u => u === "m" ? "cm" : u === "cm" ? "ft" : u === "ft" ? "in" : "m")}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setUnit(u => u === "m" ? "cm" : u === "cm" ? "ft" : u === "ft" ? "in" : "m"); }}
             title="Click to change unit"
           >
             <div className="flex items-center gap-2 text-[22px] font-bold drop-shadow-sm">
