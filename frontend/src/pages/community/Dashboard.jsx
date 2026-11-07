@@ -8,6 +8,7 @@ export default function CommunityDashboard() {
   const [devices, setDevices] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [unit, setUnit] = useState("m");
   const { setIsMobileOpen } = useOutletContext() || {};
 
   useEffect(() => {
@@ -247,13 +248,24 @@ export default function CommunityDashboard() {
               Threshold
             </span>
           </div>
-          <div className="px-10 flex flex-col items-center">
+          <div
+            className="px-10 flex flex-col items-center cursor-pointer hover:opacity-80 transition select-none"
+            onClick={() => setUnit(u => u === "m" ? "cm" : u === "cm" ? "ft" : u === "ft" ? "in" : "m")}
+            title="Click to change unit"
+          >
             <div className="flex items-center gap-2 text-[22px] font-bold drop-shadow-sm">
               <i className="bx bx-water text-xl opacity-90"></i>
-              {((highestDevice?.water_level_cm || 0) / 100).toFixed(2)}m
+              {unit === "m"
+                ? `${((highestDevice?.water_level_cm || 0) / 100).toFixed(2)}m`
+                : unit === "cm"
+                  ? `${(highestDevice?.water_level_cm || 0).toFixed(1)}cm`
+                  : unit === "ft"
+                    ? `${((highestDevice?.water_level_cm || 0) / 30.48).toFixed(2)}ft`
+                    : `${((highestDevice?.water_level_cm || 0) / 2.54).toFixed(1)}in`
+              }
             </div>
             <span className="text-[11px] font-medium tracking-wider text-white/80 uppercase mt-1">
-              Water Level
+              Water Level · <span className="text-white/50">{unit}</span>
             </span>
           </div>
         </div>
